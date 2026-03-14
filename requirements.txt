@@ -1,0 +1,25 @@
+# Screen capture
+dxcam>=0.4.0
+mss>=9.0.0
+
+# Object detection
+onnxruntime-directml>=1.17.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+
+# YOLO training (install separately, heavy)
+# ultralytics>=8.1.0
+
+# Input simulation (ctypes is stdlib)
+
+# Config
+pyyaml>=6.0
+
+# Noise generation
+opensimplex>=0.4
+
+# Debug overlay
+Pillow>=10.0.0
+
+# Testing
+pytest>=7.0.0

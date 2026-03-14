@@ -1,0 +1,63 @@
+# CS2 Deathmatch Bot - Main Settings
+
+display:
+  monitor: 0                    # Monitor index for DXcam
+  width: 1920                   # Game resolution
+  height: 1080
+  capture_fps: 30               # Target capture rate
+
+game:
+  crosshair_x: 960              # Screen center X
+  crosshair_y: 540              # Screen center Y
+  fov_horizontal: 90            # CS2 default FOV
+  sensitivity: 2.0              # In-game mouse sensitivity
+  m_yaw: 0.022                  # CS2 default m_yaw
+  m_pitch: 0.022                # CS2 default m_pitch
+
+regions:
+  # HUD regions (x, y, w, h) - calibrate per resolution
+  health:    [76, 1038, 80, 30]
+  armor:     [186, 1038, 80, 30]
+  ammo_clip: [1780, 1038, 60, 30]
+  ammo_reserve: [1850, 1038, 60, 30]
+  killfeed:  [1400, 50, 500, 200]
+  alive_ct:  [870, 18, 40, 24]
+  alive_t:   [1010, 18, 40, 24]
+
+minimap:
+  x: 16
+  y: 16
+  size: 256
+  player_arrow_color: [0, 255, 0]  # Green arrow
+
+detection:
+  model_path: "models/cs2_yolov8n.onnx"
+  confidence_threshold: 0.45
+  nms_threshold: 0.5
+  input_size: 640
+  classes: ["ct", "t", "head_ct", "head_t"]
+
+keybinds:
+  forward: "w"
+  back: "s"
+  left: "a"
+  right: "d"
+  jump: "space"
+  crouch: "ctrl"
+  walk: "shift"
+  reload: "r"
+  use: "e"
+  inspect: "f"
+  drop: "g"
+  buy_menu: "b"
+
+bot:
+  tick_rate: 30                  # Main loop Hz
+  default_personality: "average"
+  debug_overlay: true
+  debug_log: true
+
+navigation:
+  stuck_timeout: 2.0            # Seconds before stuck recovery
+  waypoint_reach_dist: 50       # Pixels on minimap
+  wall_avoid_threshold: 200     # Depth pixels for wall detection

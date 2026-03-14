@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Model training data
+models/training/dataset/
+models/training/runs/
+*.pt
+*.torchscript
+
+# Keep .onnx models (small for nano)
+# !models/*.onnx
+
+# Debug outputs
+debug_output/
+screenshots/
+recordings/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Env
+.env

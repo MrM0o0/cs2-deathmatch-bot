@@ -1,0 +1,45 @@
+# Personality: Average
+# Simulates a typical casual player - decent but inconsistent
+
+name: "average"
+description: "Casual player, moderate skill, some game sense"
+
+reaction:
+  mean_ms: 250
+  std_ms: 50
+  min_ms: 150
+  max_ms: 500
+
+aim:
+  base_speed: 6.0
+  overshoot_chance: 0.35
+  overshoot_magnitude: 1.3
+  micro_corrections: [1, 3]
+  correction_delay_ms: 40
+  head_aim_chance: 0.3
+  tracking_error: 8.0
+
+spray:
+  max_spray_length: 10
+  recoil_compensation: 0.5
+  burst_length: [3, 7]
+  tap_chance: 0.3
+
+movement:
+  strafe_while_shooting: true
+  crouch_spray_chance: 0.4
+  jump_frequency: 0.05
+  walk_chance: 0.2
+  movement_noise: 0.15
+
+idle:
+  inspect_chance: 0.01
+  look_around_chance: 0.03
+  random_jump_chance: 0.01
+  pause_duration: [0.3, 1.5]
+
+combat:
+  engage_distance: 600
+  disengage_health: 30
+  reload_threshold: 0.3
+  switch_target_delay_ms: 350

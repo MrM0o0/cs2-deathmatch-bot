@@ -1,0 +1,45 @@
+# Personality: Noob
+# Simulates a new player who barely knows the controls
+
+name: "noob"
+description: "New player, slow reactions, poor aim"
+
+reaction:
+  mean_ms: 450                  # Slow reaction time
+  std_ms: 100
+  min_ms: 300
+  max_ms: 800
+
+aim:
+  base_speed: 3.0               # Slow mouse movement (pixels/ms)
+  overshoot_chance: 0.6         # Often overshoots
+  overshoot_magnitude: 1.8      # Overshoots by a lot
+  micro_corrections: [3, 6]     # Many corrections needed
+  correction_delay_ms: 80       # Slow corrections
+  head_aim_chance: 0.1          # Rarely aims for head
+  tracking_error: 15.0          # Large tracking error (pixels)
+
+spray:
+  max_spray_length: 15          # Holds trigger too long
+  recoil_compensation: 0.2      # Barely compensates
+  burst_length: [5, 10]         # Long uncontrolled bursts
+  tap_chance: 0.1               # Rarely taps
+
+movement:
+  strafe_while_shooting: false  # Stands still while shooting
+  crouch_spray_chance: 0.1      # Rarely crouches
+  jump_frequency: 0.15          # Jumps randomly sometimes
+  walk_chance: 0.05             # Almost never walks
+  movement_noise: 0.3           # Inconsistent movement
+
+idle:
+  inspect_chance: 0.02          # Per tick while idle
+  look_around_chance: 0.05
+  random_jump_chance: 0.03
+  pause_duration: [0.5, 3.0]   # Long pauses
+
+combat:
+  engage_distance: 800          # Fights at any range (bad idea)
+  disengage_health: 15          # Only runs when almost dead
+  reload_threshold: 0.1         # Reloads way too late
+  switch_target_delay_ms: 600   # Slow to switch targets

@@ -1,0 +1,45 @@
+# Personality: Tryhard
+# Simulates a skilled player who plays a lot of competitive
+
+name: "tryhard"
+description: "Experienced player, fast reactions, good crosshair placement"
+
+reaction:
+  mean_ms: 180
+  std_ms: 30
+  min_ms: 120
+  max_ms: 300
+
+aim:
+  base_speed: 10.0
+  overshoot_chance: 0.15
+  overshoot_magnitude: 1.1
+  micro_corrections: [0, 2]
+  correction_delay_ms: 20
+  head_aim_chance: 0.6
+  tracking_error: 4.0
+
+spray:
+  max_spray_length: 8
+  recoil_compensation: 0.75
+  burst_length: [2, 5]
+  tap_chance: 0.5
+
+movement:
+  strafe_while_shooting: true
+  crouch_spray_chance: 0.6
+  jump_frequency: 0.02
+  walk_chance: 0.35
+  movement_noise: 0.05
+
+idle:
+  inspect_chance: 0.005
+  look_around_chance: 0.02
+  random_jump_chance: 0.005
+  pause_duration: [0.1, 0.8]
+
+combat:
+  engage_distance: 500
+  disengage_health: 40
+  reload_threshold: 0.4
+  switch_target_delay_ms: 200
