@@ -52,15 +52,19 @@ class TargetingSystem:
         return mouse_dx, mouse_dy, screen_dist
 
     def select_target(self, detections: list[Detection],
-                      our_team: str = "ct") -> Detection | None:
+                      our_team: str = "") -> Detection | None:
         """Select the best target from a list of detections.
 
         Prioritizes:
-        1. Enemies only (skip our team)
+        1. Body detections (ct_player) - skip head-only detections for targeting
         2. Closest to crosshair
         3. Higher confidence
         """
-        enemies = [d for d in detections if our_team not in d.class_name]
+        # In DM everyone is an enemy. Prefer body detections for aim target.
+        enemies = [d for d in detections if d.class_name == "ct_player"]
+        if not enemies:
+            # Fall back to any detection
+            enemies = [d for d in detections if not d.is_head]
         if not enemies:
             return None
 

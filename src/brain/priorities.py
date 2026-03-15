@@ -33,12 +33,13 @@ class ThreatAssessor:
         return proximity_score + size_score + conf_score
 
     def prioritize_targets(self, detections: list[Detection],
-                           our_team: str = "ct") -> list[Detection]:
-        """Sort detections by threat level, filtering out teammates.
+                           our_team: str = "") -> list[Detection]:
+        """Sort detections by threat level.
 
         Returns enemies sorted by threat (highest first).
+        In DM, everyone is an enemy - prefer body (ct_player) detections.
         """
-        enemies = [d for d in detections if our_team not in d.class_name]
+        enemies = [d for d in detections if d.class_name == "ct_player"]
 
         if not enemies:
             return []

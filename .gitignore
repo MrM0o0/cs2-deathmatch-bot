@@ -15,13 +15,17 @@ models/training/runs/
 *.pt
 *.torchscript
 
-# Keep .onnx models (small for nano)
-# !models/*.onnx
+# Keep .onnx models (small enough for nano)
+!models/*.onnx
 
 # Debug outputs
 debug_output/
 screenshots/
 recordings/
+
+# Dataset exports (too large for git)
+dataset_export.zip
+cs2 character model recognition*/
 
 # IDE
 .vscode/

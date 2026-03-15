@@ -35,7 +35,7 @@ detection:
   confidence_threshold: 0.45
   nms_threshold: 0.5
   input_size: 640
-  classes: ["ct", "t", "head_ct", "head_t"]
+  classes: ["ct_player", "head"]
 
 keybinds:
   forward: "w"
