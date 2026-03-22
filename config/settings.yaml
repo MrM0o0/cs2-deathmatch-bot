@@ -2,15 +2,15 @@
 
 display:
   monitor: 0                    # Monitor index for DXcam
-  width: 1920                   # Game resolution
-  height: 1080
+  width: 3440                   # Game resolution
+  height: 1440
   capture_fps: 30               # Target capture rate
 
 game:
-  crosshair_x: 960              # Screen center X
-  crosshair_y: 540              # Screen center Y
-  fov_horizontal: 90            # CS2 default FOV
-  sensitivity: 2.0              # In-game mouse sensitivity
+  crosshair_x: 1720             # Screen center X
+  crosshair_y: 720              # Screen center Y
+  fov_horizontal: 122           # CS2 FOV adjusted for 3440x1440 ultrawide
+  sensitivity: 0.85             # In-game mouse sensitivity
   m_yaw: 0.022                  # CS2 default m_yaw
   m_pitch: 0.022                # CS2 default m_pitch
 
@@ -36,6 +36,12 @@ detection:
   nms_threshold: 0.5
   input_size: 640
   classes: ["ct_player", "head"]
+
+confirmation:
+  min_confirm_frames: 3       # Frames a target must persist before acting
+  max_missing_frames: 2       # Frames a tracker survives without a match
+  match_distance: 150.0       # Max pixel movement between frames
+  match_size_ratio: 0.4       # Min bbox size similarity (0-1)
 
 keybinds:
   forward: "w"

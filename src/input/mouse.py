@@ -17,6 +17,9 @@ INPUT_MOUSE = 0
 
 user32 = ctypes.windll.user32
 
+# ── Button state tracking ────────────────────────────────────────────────────
+_button_state = {"left": False, "right": False, "middle": False}
+
 
 # ── Structures ───────────────────────────────────────────────────────────────
 class MOUSEINPUT(ctypes.Structure):
@@ -69,10 +72,12 @@ def click(button: str = "left", hold_ms: float = 0) -> None:
     else:
         down_flag, up_flag = MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP
 
+    _button_state[button] = True
     _send_mouse_input(0, 0, down_flag)
     if hold_ms > 0:
         time.sleep(hold_ms / 1000.0)
     _send_mouse_input(0, 0, up_flag)
+    _button_state[button] = False
 
 
 def mouse_down(button: str = "left") -> None:
@@ -82,6 +87,7 @@ def mouse_down(button: str = "left") -> None:
         "right": MOUSEEVENTF_RIGHTDOWN,
         "middle": MOUSEEVENTF_MIDDLEDOWN,
     }
+    _button_state[button] = True
     _send_mouse_input(0, 0, flags.get(button, MOUSEEVENTF_LEFTDOWN))
 
 
@@ -93,3 +99,22 @@ def mouse_up(button: str = "left") -> None:
         "middle": MOUSEEVENTF_MIDDLEUP,
     }
     _send_mouse_input(0, 0, flags.get(button, MOUSEEVENTF_LEFTUP))
+    _button_state[button] = False
+
+
+def is_button_down(button: str = "left") -> bool:
+    """Check if a button is currently held down."""
+    return _button_state.get(button, False)
+
+
+def ensure_released(button: str = "left") -> None:
+    """Release button only if it's currently held. Safety net."""
+    if _button_state.get(button, False):
+        mouse_up(button)
+
+
+def release_all_buttons() -> None:
+    """Force release all mouse buttons. Emergency safety."""
+    for button in ("left", "right", "middle"):
+        if _button_state.get(button, False):
+            mouse_up(button)

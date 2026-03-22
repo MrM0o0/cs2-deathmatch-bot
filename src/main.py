@@ -13,6 +13,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.capture.screen import ScreenCapture
 from src.capture.region import extract_region
 from src.vision.detector import YOLODetector, Detection
+from src.vision.confirmation_filter import ConfirmationFilter
 from src.vision.hud_reader import HUDReader, HUDState
 from src.vision.minimap import MinimapReader
 from src.brain.state_machine import StateMachine, BotState
@@ -67,6 +68,13 @@ class Bot:
             confidence_threshold=det_cfg["confidence_threshold"],
             nms_threshold=det_cfg["nms_threshold"],
             classes=det_cfg["classes"],
+        )
+        conf_cfg = self.config.get("confirmation", {})
+        self.confirmation_filter = ConfirmationFilter(
+            min_confirm_frames=conf_cfg.get("min_confirm_frames", 3),
+            max_missing_frames=conf_cfg.get("max_missing_frames", 2),
+            match_distance=conf_cfg.get("match_distance", 150.0),
+            match_size_ratio=conf_cfg.get("match_size_ratio", 0.4),
         )
         self.hud_reader = HUDReader(self.config["regions"])
         mm = self.config["minimap"]
@@ -174,8 +182,9 @@ class Bot:
                 time.sleep(0.001)
                 continue
 
-            # 2. Run detection
-            detections = self.detector.detect(frame)
+            # 2. Run detection + confirmation filter
+            raw_detections = self.detector.detect(frame)
+            detections = self.confirmation_filter.update(raw_detections)
 
             # 3. Read HUD
             hud = self.hud_reader.read(frame)
@@ -217,6 +226,7 @@ class Bot:
                     inference_ms=self.detector.inference_ms,
                     extra_lines=[
                         f"Action: {action.type}",
+                        f"Raw: {len(raw_detections)} | Confirmed: {len(detections)}",
                         f"Stuck recoveries: {self.stuck_detector.recovery_count}",
                     ],
                 )

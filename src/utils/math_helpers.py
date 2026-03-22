@@ -42,26 +42,46 @@ def random_in_range(low: float, high: float) -> float:
 
 def screen_delta_to_mouse(dx_pixels: float, dy_pixels: float,
                           sensitivity: float, m_yaw: float,
-                          m_pitch: float) -> tuple[int, int]:
+                          m_pitch: float,
+                          screen_width: int = 3440,
+                          screen_height: int = 1440,
+                          fov_horizontal: float = 90.0,
+                          scale: float = 1.0) -> tuple[int, int]:
     """Convert screen pixel delta to mouse movement counts.
 
-    CS2 mouse input: pixels_moved = counts * sensitivity * m_yaw
-    So: counts = pixels / (sensitivity * m_yaw)
+    Uses proper FOV-based angle calculation:
+    1. Compute focal length from screen width and horizontal FOV
+    2. Convert pixel offset to angle using atan
+    3. Convert angle to mouse counts using sensitivity * m_yaw
+    4. Apply scale factor for calibration
 
     Args:
-        dx_pixels: Horizontal screen pixel difference.
-        dy_pixels: Vertical screen pixel difference.
+        dx_pixels: Horizontal screen pixel difference from crosshair.
+        dy_pixels: Vertical screen pixel difference from crosshair.
         sensitivity: CS2 in-game sensitivity.
         m_yaw: CS2 m_yaw value (default 0.022).
         m_pitch: CS2 m_pitch value (default 0.022).
+        screen_width: Screen resolution width in pixels.
+        screen_height: Screen resolution height in pixels.
+        fov_horizontal: CS2 horizontal FOV in degrees.
+        scale: Calibration multiplier (tune if over/undershooting).
 
     Returns:
         (mouse_dx, mouse_dy) in raw mouse counts.
     """
-    # The actual conversion depends on resolution and FOV
-    # This is a simplified model - needs calibration per setup
-    mouse_dx = int(dx_pixels / (sensitivity * m_yaw))
-    mouse_dy = int(dy_pixels / (sensitivity * m_pitch))
+    # Focal length: half the screen width divided by tan(half FOV)
+    half_fov_rad = math.radians(fov_horizontal / 2.0)
+    focal_length = (screen_width / 2.0) / math.tan(half_fov_rad)
+
+    # Convert pixel offset to angle in degrees
+    angle_x_deg = math.degrees(math.atan2(dx_pixels, focal_length))
+    angle_y_deg = math.degrees(math.atan2(dy_pixels, focal_length))
+
+    # In CS2: angle_change = mouse_counts * sensitivity * m_yaw
+    # So: mouse_counts = angle_change / (sensitivity * m_yaw)
+    mouse_dx = int(angle_x_deg / (sensitivity * m_yaw) * scale)
+    mouse_dy = int(angle_y_deg / (sensitivity * m_pitch) * scale)
+
     return mouse_dx, mouse_dy
 
 

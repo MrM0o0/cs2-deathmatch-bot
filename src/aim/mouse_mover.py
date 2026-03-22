@@ -9,6 +9,20 @@ from src.humanizer.noise import NoiseGenerator
 from src.input.mouse import move_relative
 
 
+def _smoothstep(t: float) -> float:
+    """Hermite smoothstep easing — accelerates then decelerates like a real hand."""
+    return t * t * (3.0 - 2.0 * t)
+
+
+def _spin_wait(seconds: float) -> None:
+    """Precise sub-millisecond wait using busy spin instead of sleep()."""
+    if seconds <= 0:
+        return
+    target = time.perf_counter() + seconds
+    while time.perf_counter() < target:
+        pass
+
+
 class MouseMover:
     """Moves mouse along Bezier curves with noise for human-like aiming."""
 
@@ -38,15 +52,16 @@ class MouseMover:
         if dist < 1:
             return
 
-        # Auto-calculate duration based on distance and speed
+        # Auto-calculate duration using Fitts's Law inspired curve
+        # Fast flicks with slight variance
         if duration_ms is None:
-            duration_ms = dist / self.base_speed
-            # Add some variance
+            duration_ms = 30 + 40 * math.log2(1 + dist / 50)
             duration_ms *= random.uniform(0.85, 1.15)
-            duration_ms = max(16, min(500, duration_ms))  # Clamp
+            duration_ms = max(16, min(300, duration_ms))
 
         if steps is None:
-            steps = max(4, int(duration_ms / 8))  # ~8ms per step
+            # ~2ms per step for smooth movement (was 8ms = chunky)
+            steps = max(8, int(duration_ms / 2))
 
         # Generate Bezier control points
         p0 = (0.0, 0.0)
@@ -67,13 +82,17 @@ class MouseMover:
         prev_x, prev_y = 0.0, 0.0
 
         for i in range(1, steps + 1):
-            t = i / steps
+            # Linear parameter
+            t_linear = i / steps
+
+            # Apply easing (accelerate then decelerate)
+            t = _smoothstep(t_linear)
 
             # Evaluate Bezier
             bx, by = cubic_bezier(t, p0, p1, p2, p3)
 
             # Add Perlin noise jitter (decreasing toward end)
-            fade = 1.0 - (t ** 2)  # Noise fades as we approach target
+            fade = 1.0 - (t_linear ** 2)
             jx, jy = self._noise.mouse_jitter(self.noise_amplitude * fade)
             bx += jx
             by += jy
@@ -91,10 +110,11 @@ class MouseMover:
             if int_dx != 0 or int_dy != 0:
                 move_relative(int_dx, int_dy)
 
-            prev_x, prev_y = bx - jx, by - jy  # Track without jitter
+            prev_x, prev_y = bx - jx, by - jy
 
+            # Use spin-wait for precise timing instead of sleep()
             if step_delay > 0:
-                time.sleep(step_delay)
+                _spin_wait(step_delay)
 
     def move_instant(self, dx: int, dy: int) -> None:
         """Instant mouse movement (for small corrections)."""
@@ -102,5 +122,5 @@ class MouseMover:
 
     def micro_correct(self, dx: float, dy: float, delay_ms: float = 40) -> None:
         """Small correction movement after initial flick."""
-        steps = random.randint(2, 4)
+        steps = random.randint(3, 6)
         self.move_to_delta(dx, dy, duration_ms=delay_ms, steps=steps)
