@@ -1,4 +1,8 @@
-"""Low-level mouse input via Win32 SendInput (DirectInput compatible)."""
+"""Low-level mouse input via Win32.
+
+Uses SendInput for mouse MOVEMENT (CS2 reads raw input for aim).
+Uses mouse_event for CLICKS (CS2 blocks SendInput clicks but accepts mouse_event).
+"""
 
 import ctypes
 import ctypes.wintypes as wt
@@ -20,8 +24,19 @@ user32 = ctypes.windll.user32
 # ── Button state tracking ────────────────────────────────────────────────────
 _button_state = {"left": False, "right": False, "middle": False}
 
+_DOWN_FLAGS = {
+    "left": MOUSEEVENTF_LEFTDOWN,
+    "right": MOUSEEVENTF_RIGHTDOWN,
+    "middle": MOUSEEVENTF_MIDDLEDOWN,
+}
+_UP_FLAGS = {
+    "left": MOUSEEVENTF_LEFTUP,
+    "right": MOUSEEVENTF_RIGHTUP,
+    "middle": MOUSEEVENTF_MIDDLEUP,
+}
 
-# ── Structures ───────────────────────────────────────────────────────────────
+
+# ── Structures (for SendInput mouse movement) ────────────────────────────────
 class MOUSEINPUT(ctypes.Structure):
     _fields_ = [
         ("dx", ctypes.c_long),
@@ -43,62 +58,41 @@ class INPUT(ctypes.Structure):
     ]
 
 
-def _send_mouse_input(dx: int, dy: int, flags: int) -> None:
-    """Send a single mouse input event via SendInput."""
+def move_relative(dx: int, dy: int) -> None:
+    """Move mouse by relative pixels via SendInput. CS2 reads this for aim."""
     mi = MOUSEINPUT(
-        dx=dx,
-        dy=dy,
-        mouseData=0,
-        dwFlags=flags,
-        time=0,
-        dwExtraInfo=ctypes.pointer(ctypes.c_ulong(0)),
+        dx=int(dx), dy=int(dy), mouseData=0, dwFlags=MOUSEEVENTF_MOVE,
+        time=0, dwExtraInfo=ctypes.pointer(ctypes.c_ulong(0)),
     )
     inp = INPUT(type=INPUT_MOUSE)
     inp.union.mi = mi
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
-def move_relative(dx: int, dy: int) -> None:
-    """Move mouse by relative pixels. This is what CS2 reads for aim."""
-    _send_mouse_input(dx, dy, MOUSEEVENTF_MOVE)
-
-
 def click(button: str = "left", hold_ms: float = 0) -> None:
-    """Click a mouse button with optional hold duration."""
-    if button == "left":
-        down_flag, up_flag = MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP
-    elif button == "right":
-        down_flag, up_flag = MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP
-    else:
-        down_flag, up_flag = MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP
+    """Click a mouse button with optional hold duration. Uses mouse_event."""
+    down_flag = _DOWN_FLAGS.get(button, MOUSEEVENTF_LEFTDOWN)
+    up_flag = _UP_FLAGS.get(button, MOUSEEVENTF_LEFTUP)
 
     _button_state[button] = True
-    _send_mouse_input(0, 0, down_flag)
+    user32.mouse_event(down_flag, 0, 0, 0, 0)
     if hold_ms > 0:
         time.sleep(hold_ms / 1000.0)
-    _send_mouse_input(0, 0, up_flag)
+    user32.mouse_event(up_flag, 0, 0, 0, 0)
     _button_state[button] = False
 
 
 def mouse_down(button: str = "left") -> None:
-    """Press mouse button down."""
-    flags = {
-        "left": MOUSEEVENTF_LEFTDOWN,
-        "right": MOUSEEVENTF_RIGHTDOWN,
-        "middle": MOUSEEVENTF_MIDDLEDOWN,
-    }
+    """Press mouse button down. Uses mouse_event (works in CS2)."""
     _button_state[button] = True
-    _send_mouse_input(0, 0, flags.get(button, MOUSEEVENTF_LEFTDOWN))
+    flag = _DOWN_FLAGS.get(button, MOUSEEVENTF_LEFTDOWN)
+    user32.mouse_event(flag, 0, 0, 0, 0)
 
 
 def mouse_up(button: str = "left") -> None:
-    """Release mouse button."""
-    flags = {
-        "left": MOUSEEVENTF_LEFTUP,
-        "right": MOUSEEVENTF_RIGHTUP,
-        "middle": MOUSEEVENTF_MIDDLEUP,
-    }
-    _send_mouse_input(0, 0, flags.get(button, MOUSEEVENTF_LEFTUP))
+    """Release mouse button. Uses mouse_event (works in CS2)."""
+    flag = _UP_FLAGS.get(button, MOUSEEVENTF_LEFTUP)
+    user32.mouse_event(flag, 0, 0, 0, 0)
     _button_state[button] = False
 
 
