@@ -1,0 +1,174 @@
+[   0.000s] === Diagnostic Log Started ===
+[   0.927s] Resolution: 3440x1440
+[   0.927s] Settings: sens=0.85 fov=122.0 burst=8
+[   1.775s] TICK: f=50 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=0
+[   2.741s] TICK: f=100 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=18ms fps=63
+[   3.630s] TICK: f=150 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=14ms fps=54
+[   4.117s] NEW TARGET (1627,525) reaction=132ms
+[   4.232s] AIM PATH: dist=208px mouse=(-389,-535) steps=59
+[   4.443s] AIM PATH: dist=159px mouse=(-361,-357) steps=56
+[   4.620s] BURST START: dist=27px
+[   4.658s] TICK: f=200 FIRING (0/8) fire=shooting raw=2 conf=2 bezier=idle inf=12ms fps=58
+[   5.401s] BURST END (persist): 8 bullets
+[   5.688s] TICK: f=250 NO TARGET fire=idle raw=1 conf=0 bezier=idle inf=14ms fps=44
+[   6.387s] NEW TARGET (2355,724) reaction=127ms
+[   6.517s] AIM PATH: dist=575px mouse=(1659,-127) steps=73
+[   6.789s] TICK: f=300 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=16ms fps=49
+[   6.991s] NEW TARGET (1828,750) reaction=78ms
+[   7.677s] NEW TARGET (1735,760) reaction=81ms
+[   7.749s] TICK: f=350 REACTING fire=idle raw=2 conf=2 bezier=idle inf=19ms fps=47
+[   7.761s] BURST START: dist=7px
+[   8.564s] BURST END (persist): 8 bullets
+[   8.711s] TICK: f=400 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=23ms fps=52
+[   9.313s] NEW TARGET (1083,753) reaction=146ms
+[   9.462s] AIM PATH: dist=558px mouse=(-1620,-80) steps=72
+[   9.684s] AIM PATH: dist=473px mouse=(-1409,-63) steps=75
+[   9.696s] TICK: f=450 AIMING (473px) fire=aiming raw=2 conf=2 bezier=active inf=13ms fps=55
+[   9.927s] AIM PATH: dist=468px mouse=(-1395,-81) steps=66
+[  10.117s] AIM PATH: dist=468px mouse=(-1396,-77) steps=68
+[  10.353s] AIM PATH: dist=466px mouse=(-1391,-72) steps=77
+[  10.580s] AIM PATH: dist=466px mouse=(-1390,-67) steps=66
+[  10.781s] AIM PATH: dist=382px mouse=(-1167,-67) steps=67
+[  10.987s] AIM PATH: dist=251px mouse=(-784,-91) steps=66
+[  11.167s] TICK: f=500 AIMING (166px) fire=aiming raw=1 conf=1 bezier=active inf=15ms fps=34
+[  11.177s] AIM PATH: dist=166px mouse=(-523,-83) steps=61
+[  11.373s] AIM PATH: dist=54px mouse=(-169,-42) steps=44
+[  11.501s] BURST START: dist=31px
+[  12.188s] TICK: f=550 PERSIST (6/8) fire=shooting raw=0 conf=0 bezier=idle inf=11ms fps=48
+[  12.302s] BURST END (persist): 8 bullets
+[  13.071s] TICK: f=600 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=14ms fps=48
+[  13.248s] NEW TARGET (134,831) reaction=146ms
+[  13.501s] NEW TARGET (1702,635) reaction=101ms
+[  13.594s] AIM PATH: dist=119px mouse=(194,-327) steps=49
+[  14.007s] TICK: f=650 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=18ms fps=58
+[  14.899s] TICK: f=700 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=54
+[  15.416s] NEW TARGET (1622,687) reaction=123ms
+[  15.538s] AIM PATH: dist=83px mouse=(-181,-195) steps=48
+[  15.690s] AIM PATH: dist=96px mouse=(-161,-262) steps=51
+[  15.842s] AIM PATH: dist=103px mouse=(-73,-320) steps=53
+[  16.002s] AIM PATH: dist=102px mouse=(-63,-321) steps=50
+[  16.015s] TICK: f=750 AIMING (102px) fire=aiming raw=2 conf=2 bezier=active inf=11ms fps=56
+[  16.151s] AIM PATH: dist=102px mouse=(-62,-321) steps=52
+[  16.332s] AIM PATH: dist=98px mouse=(-69,-306) steps=45
+[  16.486s] AIM PATH: dist=99px mouse=(-68,-307) steps=53
+[  16.666s] AIM PATH: dist=92px mouse=(-66,-286) steps=50
+[  16.808s] AIM PATH: dist=87px mouse=(-66,-272) steps=46
+[  16.990s] AIM PATH: dist=88px mouse=(-68,-273) steps=52
+[  17.191s] BURST START: dist=47px
+[  17.433s] TICK: f=800 FIRING (2/8) fire=shooting raw=2 conf=2 bezier=idle inf=30ms fps=34
+[  17.974s] BURST END: 8 bullets, recoil=32
+[  18.156s] AIM PATH: dist=76px mouse=(-223,94) steps=44
+[  18.297s] BURST START: dist=47px
+[  18.359s] TICK: f=850 FIRING (0/8) fire=shooting raw=1 conf=1 bezier=idle inf=22ms fps=55
+[  19.107s] BURST END: 8 bullets, recoil=32
+[  19.275s] TICK: f=900 NO TARGET fire=idle raw=1 conf=0 bezier=idle inf=19ms fps=54
+[  19.999s] NEW TARGET (1735,384) reaction=138ms
+[  20.249s] TICK: f=950 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=22ms fps=54
+[  21.046s] NEW TARGET (1667,623) reaction=62ms
+[  21.215s] TICK: f=1000 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=34ms fps=51
+[  22.048s] NEW TARGET (1304,759) reaction=110ms
+[  22.139s] TICK: f=1050 REACTING fire=idle raw=1 conf=1 bezier=idle inf=13ms fps=53
+[  22.180s] AIM PATH: dist=212px mouse=(-657,135) steps=58
+[  22.347s] AIM PATH: dist=86px mouse=(-261,82) steps=52
+[  22.517s] BURST START: dist=46px
+[  23.180s] TICK: f=1100 PERSIST (6/8) fire=shooting raw=0 conf=0 bezier=idle inf=15ms fps=52
+[  23.295s] BURST END (persist): 8 bullets
+[  24.132s] TICK: f=1150 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=22ms fps=49
+[  25.089s] TICK: f=1200 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=15ms fps=53
+[  26.040s] TICK: f=1250 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=52
+[  27.002s] TICK: f=1300 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=54
+[  28.014s] TICK: f=1350 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=11ms fps=51
+[  28.981s] NEW TARGET (1530,727) reaction=104ms
+[  28.982s] TICK: f=1400 REACTING fire=idle raw=1 conf=1 bezier=idle inf=12ms fps=50
+[  29.081s] AIM PATH: dist=223px mouse=(-700,-76) steps=64
+[  29.301s] AIM PATH: dist=182px mouse=(-514,-266) steps=61
+[  29.497s] BURST START: dist=30px
+[  30.068s] TICK: f=1450 FIRING (5/8) fire=shooting raw=2 conf=2 bezier=idle inf=28ms fps=49
+[  30.300s] BURST END (persist): 8 bullets
+[  30.976s] TICK: f=1500 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=25ms fps=51
+[  31.922s] TICK: f=1550 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=13ms fps=57
+[  32.904s] TICK: f=1600 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=26ms fps=52
+[  33.365s] NEW TARGET (1511,693) reaction=66ms
+[  33.486s] AIM PATH: dist=214px mouse=(-666,-118) steps=57
+[  33.838s] TICK: f=1650 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=11ms fps=51
+[  34.791s] TICK: f=1700 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=24ms fps=56
+[  35.545s] NEW TARGET (1706,714) reaction=147ms
+[  35.700s] BURST START: dist=24px
+[  35.775s] TICK: f=1750 PERSIST (0/8) fire=shooting raw=0 conf=0 bezier=idle inf=22ms fps=50
+[  36.058s] FIRE STOP: target lost
+[  36.789s] TICK: f=1800 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=15ms fps=51
+[  37.752s] TICK: f=1850 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=21ms fps=53
+[  38.690s] NEW TARGET (1672,617) reaction=110ms
+[  38.691s] TICK: f=1900 REACTING fire=idle raw=1 conf=1 bezier=idle inf=10ms fps=52
+[  38.798s] AIM PATH: dist=126px mouse=(-60,-397) steps=49
+[  38.962s] AIM PATH: dist=81px mouse=(32,-258) steps=46
+[  39.083s] BURST START: dist=28px
+[  39.694s] TICK: f=1950 PERSIST (5/8) fire=shooting raw=0 conf=0 bezier=idle inf=14ms fps=50
+[  39.907s] BURST END: 8 bullets, recoil=32
+[  40.091s] AIM PATH: dist=90px mouse=(178,-225) steps=50
+[  40.197s] AIM PATH: dist=70px mouse=(112,-195) steps=40
+[  40.336s] AIM PATH: dist=58px mouse=(54,-178) steps=38
+[  40.462s] BURST START: dist=30px
+[  40.731s] TICK: f=2000 FIRING (2/8) fire=shooting raw=2 conf=2 bezier=idle inf=19ms fps=50
+[  41.147s] FIRE STOP: target lost
+[  41.671s] TICK: f=2050 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=11ms fps=54
+[  42.639s] TICK: f=2100 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=15ms fps=53
+[  42.763s] NEW TARGET (1955,748) reaction=123ms
+[  42.878s] AIM PATH: dist=193px mouse=(611,-3) steps=66
+[  43.116s] BURST START: dist=16px
+[  43.747s] TICK: f=2150 FIRING (6/8) fire=shooting raw=2 conf=2 bezier=idle inf=24ms fps=46
+[  43.895s] BURST END: 8 bullets, recoil=32
+[  44.066s] BURST START: dist=40px
+[  44.446s] FIRE STOP: target lost
+[  44.543s] NEW TARGET (1324,680) reaction=138ms
+[  44.625s] TICK: f=2200 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=11ms fps=56
+[  44.670s] AIM PATH: dist=439px mouse=(-1285,-355) steps=78
+[  45.630s] NEW TARGET (1392,665) reaction=109ms
+[  45.642s] TICK: f=2250 REACTING fire=idle raw=1 conf=1 bezier=idle inf=29ms fps=49
+[  45.736s] AIM PATH: dist=340px mouse=(-1012,-294) steps=75
+[  46.751s] TICK: f=2300 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=15ms fps=46
+[  47.763s] TICK: f=2350 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=29ms fps=50
+[  48.711s] TICK: f=2400 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=16ms fps=52
+[  49.695s] TICK: f=2450 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=19ms fps=53
+[  50.013s] NEW TARGET (1432,739) reaction=81ms
+[  50.105s] AIM PATH: dist=305px mouse=(-949,9) steps=65
+[  50.301s] AIM PATH: dist=58px mouse=(183,-30) steps=46
+[  50.775s] TICK: f=2500 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=47
+[  51.406s] NEW TARGET (1615,637) reaction=113ms
+[  51.535s] AIM PATH: dist=173px mouse=(-414,-367) steps=60
+[  51.698s] AIM PATH: dist=63px mouse=(179,96) steps=43
+[  51.801s] TICK: f=2550 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=23ms fps=52
+[  52.083s] NEW TARGET (1725,761) reaction=85ms
+[  52.146s] AIM PATH: dist=148px mouse=(467,71) steps=58
+[  52.279s] AIM PATH: dist=58px mouse=(183,29) steps=44
+[  52.432s] AIM PATH: dist=124px mouse=(-396,18) steps=55
+[  52.512s] AIM PATH: dist=410px mouse=(-1192,-389) steps=71
+[  52.858s] TICK: f=2600 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=25ms fps=45
+[  53.764s] TICK: f=2650 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=10ms fps=55
+[  54.781s] TICK: f=2700 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=12ms fps=52
+[  55.777s] TICK: f=2750 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=15ms fps=51
+[  56.809s] TICK: f=2800 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=30ms fps=49
+[  57.589s] NEW TARGET (1749,631) reaction=87ms
+[  57.693s] AIM PATH: dist=253px mouse=(505,-624) steps=63
+[  57.925s] AIM PATH: dist=515px mouse=(1416,-630) steps=75
+[  57.938s] TICK: f=2850 AIMING (515px) fire=aiming raw=2 conf=2 bezier=active inf=15ms fps=48
+[  58.184s] AIM PATH: dist=402px mouse=(1104,-573) steps=76
+[  59.023s] TICK: f=2900 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=25ms fps=43
+[  59.343s] NEW TARGET (2267,624) reaction=131ms
+[  59.527s] AIM PATH: dist=210px mouse=(583,-322) steps=63
+[  59.994s] NEW TARGET (1841,657) reaction=97ms
+[  60.086s] AIM PATH: dist=140px mouse=(374,-244) steps=59
+[  60.088s] TICK: f=2950 AIMING (140px) fire=aiming raw=1 conf=1 bezier=active inf=21ms fps=49
+[  61.190s] TICK: f=3000 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=16ms fps=44
+[  61.716s] NEW TARGET (1754,696) reaction=69ms
+[  61.814s] AIM PATH: dist=52px mouse=(121,-113) steps=39
+[  61.917s] BURST START: dist=49px
+[  62.125s] TICK: f=3050 FIRING (2/8) fire=shooting raw=1 conf=1 bezier=idle inf=9ms fps=54
+[  62.704s] BURST END (persist): 8 bullets
+[  62.950s] NEW TARGET (1731,721) reaction=93ms
+[  63.043s] BURST START: dist=28px
+[  63.110s] TICK: f=3100 FIRING (0/8) fire=shooting raw=1 conf=1 bezier=idle inf=24ms fps=52
+[  63.433s] FIRE STOP: target lost
+[  64.155s] TICK: f=3150 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=51
+[  65.145s] TICK: f=3200 NO TARGET fire=idle raw=0 conf=0 bezier=idle inf=20ms fps=47
+[  65.505s] === Log Ended ===

@@ -1,5 +1,5 @@
 # Screen capture
-dxcam>=0.4.0
+dxcam>=0.3.0
 mss>=9.0.0
 
 # Object detection

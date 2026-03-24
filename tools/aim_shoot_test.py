@@ -1,10 +1,8 @@
-"""Aim + shoot test v5 — non-blocking aim, simple fire control.
+"""Aim + shoot test v6 — smooth Bezier paths, proper recoil, death detection.
 
-The main loop never blocks. Each frame:
-1. Detect enemies
-2. Calculate how much to move mouse
-3. Apply a fraction of that movement (smooth, non-blocking)
-4. If on target: fire burst (8 bullets), pull down, stop, re-aim
+Non-blocking Bezier curves for smooth aim.
+Recoil pull-down during spray.
+Stops shooting shortly after target dies.
 
 Usage:
     python tools/aim_shoot_test.py
@@ -28,6 +26,7 @@ import numpy as np
 from src.capture.screen import ScreenCapture
 from src.vision.detector import YOLODetector, Detection
 from src.vision.confirmation_filter import ConfirmationFilter
+from src.aim.aim_path import AimPath
 from src.input import mouse
 from src.utils.math_helpers import bbox_to_aim_point, distance, screen_delta_to_mouse
 
@@ -51,16 +50,16 @@ class DiagLogger:
         self.f.close()
 
 
-# ── Fire states ──
-FIRE_IDLE = "idle"           # Not firing, looking for target
-FIRE_AIMING = "aiming"       # Moving crosshair toward target
-FIRE_SHOOTING = "shooting"   # Mouse held down, spraying
-FIRE_COOLDOWN = "cooldown"   # Brief pause between bursts
+FIRE_IDLE = "idle"
+FIRE_AIMING = "aiming"
+FIRE_SHOOTING = "shooting"
+FIRE_COOLDOWN = "cooldown"
 
 
 def main():
     print("=" * 55)
-    print("  CS2 Aim + Shoot Test v5 (non-blocking)")
+    print("  CS2 Aim + Shoot Test v6")
+    print("  Smooth Bezier | Recoil | Death detect")
     print("  Press Q in debug window or Ctrl+C to stop")
     print("=" * 55)
 
@@ -75,7 +74,9 @@ def main():
         match_distance=200.0, match_size_ratio=0.3,
     )
 
-    capture = ScreenCapture(target_fps=60)
+    aim_path = AimPath()
+
+    capture = ScreenCapture(target_fps=120)
     backend = capture.start()
 
     # Auto-detect resolution
@@ -99,19 +100,13 @@ def main():
     m_pitch = 0.022
     fov_h = 122.0
 
-    # Aim settings
-    aim_smoothing = 0.35          # Apply 35% of needed movement per frame (smooth tracking)
-    aim_threshold = 50            # Start firing when within 50px
-    aim_micro_threshold = 15      # Close enough, just fire
-
     # Fire settings
-    bullets_per_burst = 8         # Bullets per burst
-    bullet_interval = 0.1         # ~100ms per bullet (600 RPM)
-    burst_cooldown_time = 0.15    # Pause between bursts
-    recoil_per_bullet = 3         # Pull down per bullet (pixels)
+    bullets_per_burst = 8
+    bullet_interval = 0.1       # 100ms per bullet
+    burst_cooldown_time = 0.15
+    recoil_per_bullet = 4       # Pull down per bullet
 
-    log.log(f"Settings: sens={sensitivity} fov={fov_h} smooth={aim_smoothing} "
-           f"burst={bullets_per_burst} bullets")
+    log.log(f"Settings: sens={sensitivity} fov={fov_h} burst={bullets_per_burst}")
 
     print(f"\nRunning! Switch to CS2. Press Q to stop.\n")
 
@@ -123,11 +118,24 @@ def main():
     fire_start_time = 0
     bullets_fired = 0
     cooldown_until = 0
-    last_target_pos = None        # Last known target position
-    last_target_time = 0          # When we last saw a target
-    target_lost_grace = 0.5       # Keep state for 500ms after losing target
+    last_target_pos = None
+    last_target_time = 0
+    target_lost_grace = 0.3       # Only keep firing 300ms after target gone
     frame_count = 0
     reaction_until = 0
+    last_aim_dist = 999
+
+    # FPS counter
+    fps_counter = 0
+    fps_timer = time.perf_counter()
+    display_fps = 0
+
+    # Detection results
+    raw = []
+    confirmed = []
+
+    # Recoil tracking
+    total_recoil_applied = 0
 
     try:
         while True:
@@ -139,26 +147,39 @@ def main():
             now = time.perf_counter()
             frame_count += 1
 
-            # ── DETECT ──
-            raw = detector.detect(frame)
-            confirmed = conf_filter.update(raw)
+            # FPS counter
+            fps_counter += 1
+            if now - fps_timer >= 1.0:
+                display_fps = fps_counter
+                fps_counter = 0
+                fps_timer = now
 
-            # Pick closest player to crosshair
+            # Safety: force release after 2s
+            if fire_state == FIRE_SHOOTING and (now - fire_start_time) > 2.0:
+                mouse.mouse_up("left")
+                fire_state = FIRE_IDLE
+                total_recoil_applied = 0
+                log.log("SAFETY: force release after 2s")
+
+            # ── DETECT (every 2nd frame) ──
+            if frame_count % 2 == 0:
+                raw = detector.detect(frame)
+                confirmed = conf_filter.update(raw)
+
+            # Pick target
             players = [d for d in confirmed if d.class_name == "ct_player"]
             target = None
             if players:
-                # If we have a last known position, prefer targets near it (target lock)
                 if last_target_pos is not None:
                     near = [p for p in players if distance(p.center, last_target_pos) < 300]
                     if near:
                         near.sort(key=lambda d: distance(d.center, last_target_pos))
                         target = near[0]
-
                 if target is None:
                     players.sort(key=lambda d: distance(d.center, (cx, cy)))
                     target = players[0]
 
-            # Update target tracking
+            # Track target
             if target:
                 tcx, tcy = target.center
                 is_new = (last_target_pos is None or
@@ -167,16 +188,20 @@ def main():
                 last_target_time = now
 
                 if is_new and fire_state != FIRE_SHOOTING:
-                    reaction_ms = random.uniform(100, 220)
+                    reaction_ms = random.uniform(60, 150)
                     reaction_until = now + reaction_ms / 1000.0
+                    aim_path.cancel()
                     log.log(f"NEW TARGET ({tcx:.0f},{tcy:.0f}) reaction={reaction_ms:.0f}ms")
 
             has_target = target is not None
             target_recently_seen = (now - last_target_time) < target_lost_grace
-
-            # ── AIM (non-blocking) ──
             status = "IDLE"
 
+            # ── STEP BEZIER PATH (every frame, sub-frame smoothing) ──
+            if aim_path.is_active:
+                aim_path.apply_frame(mouse.move_relative)
+
+            # ── AIM + FIRE LOGIC ──
             if has_target and now >= reaction_until:
                 aim_x, aim_y = bbox_to_aim_point(
                     target.x1, target.y1, target.x2, target.y2,
@@ -185,116 +210,117 @@ def main():
                 dx_pixels = aim_x - cx
                 dy_pixels = aim_y - cy
                 screen_dist = distance((cx, cy), (aim_x, aim_y))
+                last_aim_dist = screen_dist
 
-                # Convert to mouse counts
                 mouse_dx, mouse_dy = screen_delta_to_mouse(
                     dx_pixels, dy_pixels, sensitivity, m_yaw, m_pitch,
                     screen_w, screen_h, fov_h
                 )
 
                 if fire_state == FIRE_SHOOTING:
-                    # While firing: gentle tracking (25% correction)
-                    track_dx = int(mouse_dx * 0.25)
-                    track_dy = int(mouse_dy * 0.25)
-                    if abs(track_dx) > 1 or abs(track_dy) > 1:
-                        mouse.move_relative(track_dx, track_dy)
-                    status = f"FIRING+TRACK"
-                else:
-                    # Not firing: smooth aim toward target
-                    # Apply a fraction of the needed movement (non-blocking!)
-                    if screen_dist > aim_micro_threshold:
-                        smooth = aim_smoothing
-                        # Move faster when far away
-                        if screen_dist > 300:
-                            smooth = 0.6
-                        elif screen_dist > 150:
-                            smooth = 0.45
-
-                        move_dx = int(mouse_dx * smooth)
-                        move_dy = int(mouse_dy * smooth)
-
-                        # Ensure we always move at least 1 pixel if there's a delta
-                        if move_dx == 0 and abs(mouse_dx) > 0:
-                            move_dx = 1 if mouse_dx > 0 else -1
-                        if move_dy == 0 and abs(mouse_dy) > 0:
-                            move_dy = 1 if mouse_dy > 0 else -1
-
-                        mouse.move_relative(move_dx, move_dy)
-                        status = f"AIMING ({screen_dist:.0f}px)"
-                    else:
-                        status = "ON TARGET"
-
-                # ── FIRE STATE MACHINE ──
-                if fire_state == FIRE_IDLE or fire_state == FIRE_AIMING:
-                    if screen_dist <= aim_threshold:
-                        fire_state = FIRE_SHOOTING
-                        mouse.mouse_down("left")
-                        fire_start_time = now
-                        bullets_fired = 0
-                        log.log(f"BURST START: dist={screen_dist:.0f}px")
-
-                elif fire_state == FIRE_SHOOTING:
+                    # While firing: gentle tracking + recoil
                     spray_time = now - fire_start_time
                     bullets_fired = int(spray_time / bullet_interval)
 
-                    # Pull down for recoil each frame
-                    if bullets_fired > 0:
-                        mouse.move_relative(0, recoil_per_bullet)
+                    # Recoil pull-down (cumulative)
+                    target_recoil = bullets_fired * recoil_per_bullet
+                    recoil_to_apply = target_recoil - total_recoil_applied
+                    if recoil_to_apply > 0:
+                        mouse.move_relative(0, recoil_to_apply)
+                        total_recoil_applied = target_recoil
 
-                    # End burst after enough bullets
+                    # Track target while firing (small corrections)
+                    track_dx = int(mouse_dx * 0.2)
+                    track_dy = int(mouse_dy * 0.2)
+                    if abs(track_dx) > 1 or abs(track_dy) > 1:
+                        mouse.move_relative(track_dx, track_dy)
+
+                    # End burst
                     if bullets_fired >= bullets_per_burst:
                         mouse.mouse_up("left")
                         fire_state = FIRE_COOLDOWN
                         cooldown_until = now + burst_cooldown_time
-                        log.log(f"BURST END: {bullets_fired} bullets in {spray_time:.2f}s")
-                        bullets_fired = 0
-
-                    status = f"FIRING ({bullets_fired}/{bullets_per_burst})"
+                        log.log(f"BURST END: {bullets_fired} bullets, recoil={total_recoil_applied}")
+                        total_recoil_applied = 0
+                        status = "BURST END"
+                    else:
+                        status = f"FIRING ({bullets_fired}/{bullets_per_burst})"
 
                 elif fire_state == FIRE_COOLDOWN:
                     if now >= cooldown_until:
-                        fire_state = FIRE_AIMING  # Ready to fire again
+                        fire_state = FIRE_AIMING
                         status = "RE-AIMING"
                     else:
                         status = "COOLDOWN"
+
+                elif screen_dist > 50:
+                    # Need to aim — but don't restart path if one is already running
+                    # Only start new path if: no path active, or path is done and still far
+                    if not aim_path.is_active:
+                        aim_path.start(mouse_dx, mouse_dy)
+                        log.log(f"AIM PATH: dist={screen_dist:.0f}px mouse=({mouse_dx},{mouse_dy}) "
+                               f"steps={aim_path.remaining_steps}")
+                    fire_state = FIRE_AIMING
+                    status = f"AIMING ({screen_dist:.0f}px)"
+
+                elif screen_dist <= 50 and not aim_path.is_active:
+                    # On target — start firing
+                    if fire_state != FIRE_SHOOTING:
+                        # Small correction before first shot
+                        if abs(mouse_dx) > 2 or abs(mouse_dy) > 2:
+                            mouse.move_relative(int(mouse_dx * 0.5), int(mouse_dy * 0.5))
+
+                        mouse.mouse_down("left")
+                        fire_state = FIRE_SHOOTING
+                        fire_start_time = now
+                        bullets_fired = 0
+                        total_recoil_applied = 0
+                        log.log(f"BURST START: dist={screen_dist:.0f}px")
+                        status = "FIRING (start)"
+
+                elif aim_path.is_active:
+                    status = f"CURVING ({aim_path.remaining_steps} steps)"
 
             elif has_target and now < reaction_until:
                 status = "REACTING"
 
             elif not has_target:
-                if fire_state == FIRE_SHOOTING and target_recently_seen:
-                    # Keep firing briefly — target might reappear
-                    spray_time = now - fire_start_time
-                    bullets_fired = int(spray_time / bullet_interval)
-                    if bullets_fired > 0:
-                        mouse.move_relative(0, recoil_per_bullet)
-                    if bullets_fired >= bullets_per_burst:
+                if fire_state == FIRE_SHOOTING:
+                    if target_recently_seen:
+                        # Keep firing briefly — target might be between frames
+                        spray_time = now - fire_start_time
+                        bullets_fired = int(spray_time / bullet_interval)
+
+                        # Still apply recoil
+                        target_recoil = bullets_fired * recoil_per_bullet
+                        recoil_to_apply = target_recoil - total_recoil_applied
+                        if recoil_to_apply > 0:
+                            mouse.move_relative(0, recoil_to_apply)
+                            total_recoil_applied = target_recoil
+
+                        if bullets_fired >= bullets_per_burst:
+                            mouse.mouse_up("left")
+                            fire_state = FIRE_IDLE
+                            total_recoil_applied = 0
+                            log.log(f"BURST END (persist): {bullets_fired} bullets")
+                        status = f"PERSIST ({bullets_fired}/{bullets_per_burst})"
+                    else:
+                        # Target gone — stop firing
                         mouse.mouse_up("left")
                         fire_state = FIRE_IDLE
-                        log.log(f"BURST END (persist): {bullets_fired} bullets")
-                    status = f"FIRING (persist {bullets_fired}/{bullets_per_burst})"
-                elif fire_state == FIRE_SHOOTING:
-                    # Target gone too long, stop
-                    mouse.mouse_up("left")
-                    fire_state = FIRE_IDLE
-                    log.log("FIRE STOP: target lost")
-                    status = "TARGET LOST"
+                        total_recoil_applied = 0
+                        log.log("FIRE STOP: target lost")
+                        status = "TARGET LOST"
                 else:
-                    if fire_state != FIRE_IDLE:
-                        fire_state = FIRE_IDLE
-                        mouse.ensure_released("left")
+                    fire_state = FIRE_IDLE
+                    mouse.ensure_released("left")
+                    aim_path.cancel()
                     if not target_recently_seen:
                         last_target_pos = None
                     status = "NO TARGET"
 
-            # Safety: never hold fire for more than 3s
-            if fire_state == FIRE_SHOOTING and (now - fire_start_time) > 3.0:
-                mouse.mouse_up("left")
-                fire_state = FIRE_IDLE
-                log.log("SAFETY: force release after 3s")
-
             # ── DEBUG OVERLAY ──
-            if frame_count % 2 == 0:
+            if frame_count % 3 == 0:
                 vis = frame.copy()
 
                 for det in raw:
@@ -305,12 +331,10 @@ def main():
                     x1, y1, x2, y2 = int(det.x1), int(det.y1), int(det.x2), int(det.y2)
                     is_target = (det == target)
                     color = (0, 0, 255) if is_target else (0, 255, 0)
-                    thickness = 3 if is_target else 2
-                    cv2.rectangle(vis, (x1, y1), (x2, y2), color, thickness)
+                    cv2.rectangle(vis, (x1, y1), (x2, y2), color, 2 + is_target)
 
                 cv2.drawMarker(vis, (cx, cy), (255, 255, 255), cv2.MARKER_CROSS, 20, 2)
 
-                # Fire state indicator
                 if fire_state == FIRE_SHOOTING:
                     cv2.putText(vis, f"BURST {bullets_fired}/{bullets_per_burst}",
                                (cx - 80, cy + 50),
@@ -319,7 +343,7 @@ def main():
                 info = [
                     f"{status}",
                     f"Raw:{len(raw)} Conf:{len(confirmed)} | {fire_state}",
-                    f"Inf:{detector.inference_ms:.0f}ms FPS:{capture.fps:.0f}",
+                    f"Inf:{detector.inference_ms:.0f}ms FPS:{display_fps}",
                 ]
                 for i, line in enumerate(info):
                     cv2.putText(vis, line, (10, 28 + i * 26),
@@ -335,10 +359,11 @@ def main():
                 break
 
             # Log every second
-            if frame_count % 30 == 0:
+            if frame_count % 50 == 0:
                 log.log(f"TICK: f={frame_count} {status} fire={fire_state} "
                        f"raw={len(raw)} conf={len(confirmed)} "
-                       f"inf={detector.inference_ms:.0f}ms fps={capture.fps:.0f}")
+                       f"bezier={'active' if aim_path.is_active else 'idle'} "
+                       f"inf={detector.inference_ms:.0f}ms fps={display_fps}")
 
     except KeyboardInterrupt:
         print("\nStopped by user.")
