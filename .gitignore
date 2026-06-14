@@ -22,10 +22,17 @@ models/training/runs/
 debug_output/
 screenshots/
 recordings/
+logs/
 
 # Dataset exports (too large for git)
 dataset_export.zip
 cs2 character model recognition*/
+CS2 Object detection*/
+merged_dataset*/
+models/training/
+
+# Diagnostic / run logs
+tools/diagnostic_log.txt
 
 # IDE
 .vscode/

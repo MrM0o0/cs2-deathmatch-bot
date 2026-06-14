@@ -23,7 +23,7 @@ from src.aim.targeting import TargetingSystem
 from src.aim.mouse_mover import MouseMover
 from src.aim.recoil import RecoilCompensator
 from src.movement.explorer import WallFollower
-from src.movement.navigator import Navigator, WaypointGraph
+from src.movement.navigator import WaypointGraph, NavigationController
 from src.movement.stuck_detector import StuckDetector
 from src.humanizer.personality import Personality, load_personality
 from src.humanizer.timing import ReactionTimer, ActionCooldown
@@ -31,6 +31,12 @@ from src.humanizer.mistakes import MistakeMaker
 from src.humanizer.noise import NoiseGenerator
 from src.input import keyboard, mouse
 from src.utils.debug_overlay import DebugOverlay
+from src.utils.session_logger import SessionLogger
+
+
+def _round(value, ndigits: int = 1):
+    """Round floats for compact logging; pass through None/other types."""
+    return round(value, ndigits) if isinstance(value, (int, float)) else value
 
 
 def load_config(path: str = "config/settings.yaml") -> dict:
@@ -107,8 +113,13 @@ class Bot:
         self.explorer = WallFollower(
             wall_threshold=nav_cfg["wall_avoid_threshold"],
         )
-        self.navigator = Navigator(
-            reach_distance=nav_cfg["waypoint_reach_dist"],
+        self.nav_graph = WaypointGraph()
+        self.nav_controller = NavigationController(
+            self.nav_graph,
+            reach_dist=nav_cfg["waypoint_reach_dist"],
+            turn_gain=nav_cfg.get("nav_turn_gain", 1.6),
+            max_turn=nav_cfg.get("nav_max_turn", 22),
+            invert_turn=nav_cfg.get("nav_invert_turn", False),
         )
         self.stuck_detector = StuckDetector(
             timeout=nav_cfg["stuck_timeout"],
@@ -129,6 +140,13 @@ class Bot:
         self.debug = None
         if self.config["bot"]["debug_overlay"]:
             self.debug = DebugOverlay(scale=0.5)
+
+        # Session logging for after-the-fact diagnosis of a run.
+        self.logger = SessionLogger(
+            PROJECT_ROOT,
+            enabled=self.config["bot"].get("debug_log", False),
+        )
+        self._last_nav_cmd: dict = {}
 
         # State
         self._is_firing = False
@@ -154,7 +172,7 @@ class Bot:
         map_name = "dust2"  # TODO: auto-detect map
         wp_path = os.path.join(PROJECT_ROOT, "config", "maps", f"{map_name}.json")
         if os.path.exists(wp_path):
-            self.navigator.graph.load(wp_path)
+            self.nav_graph.load(wp_path)
             print(f"[Bot] Loaded waypoints for {map_name}")
 
         self.running = True
@@ -216,6 +234,29 @@ class Bot:
 
             # 8. Execute action
             self._execute_action(action, frame, enemies)
+
+            # 8b. Session logging (cheap; throttled frame saves)
+            if self.logger.enabled:
+                nav = self._last_nav_cmd
+                self.logger.log_tick(
+                    state=self.state_machine.state.name,
+                    action=action.type,
+                    enemies=len(enemies),
+                    health=hud.health,
+                    ammo=hud.ammo_clip,
+                    alive=hud.is_alive,
+                    stuck=is_stuck,
+                    nav_heading=_round(nav.get("heading_deg")),
+                    nav_yaw_err=_round(nav.get("yaw_error_deg")),
+                    nav_turn=nav.get("turn_x"),
+                    nav_route=nav.get("has_route"),
+                    infer_ms=round(self.detector.inference_ms, 1),
+                )
+                self.logger.maybe_save_frame(
+                    frame,
+                    label=f"{self.state_machine.state.name} | {action.type} | "
+                          f"en={len(enemies)} hp={hud.health}",
+                )
 
             # 9. Debug overlay
             if self.debug:
@@ -378,17 +419,26 @@ class Bot:
     def _roam(self, frame, keybinds: dict) -> None:
         """Handle roaming movement."""
         # Use waypoint navigation if available
-        if self.navigator.has_waypoints():
+        if self.nav_controller.has_waypoints():
             pos, _ = self.minimap_reader.read(frame)
-            direction = self.navigator.get_movement_direction(pos[0], pos[1])
-            if direction:
-                # Convert direction to movement keys
-                # This is simplified - real implementation needs angle conversion
+            cmd = self.nav_controller.update(pos)
+            self._last_nav_cmd = cmd
+            if cmd["has_route"]:
                 self._release_all_movement()
-                keyboard.hold_key(keybinds["forward"])
-                self._movement_keys_held.add(keybinds["forward"])
-                # Turn toward waypoint
-                mouse.move_relative(int(direction[0] * 3), 0)
+                if cmd["forward"]:
+                    keyboard.hold_key(keybinds["forward"])
+                    self._movement_keys_held.add(keybinds["forward"])
+                if cmd["back"]:
+                    keyboard.hold_key(keybinds["back"])
+                    self._movement_keys_held.add(keybinds["back"])
+                if cmd["left"]:
+                    keyboard.hold_key(keybinds["left"])
+                    self._movement_keys_held.add(keybinds["left"])
+                if cmd["right"]:
+                    keyboard.hold_key(keybinds["right"])
+                    self._movement_keys_held.add(keybinds["right"])
+                if cmd["turn_x"] != 0:
+                    mouse.move_relative(cmd["turn_x"], 0)
                 return
 
         # Fallback: reactive wall-following
@@ -440,6 +490,7 @@ class Bot:
         self.capture.stop()
         if self.debug:
             self.debug.cleanup()
+        self.logger.close()
         print("[Bot] Stopped.")
 
 

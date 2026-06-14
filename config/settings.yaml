@@ -67,3 +67,7 @@ navigation:
   stuck_timeout: 2.0            # Seconds before stuck recovery
   waypoint_reach_dist: 50       # Pixels on minimap
   wall_avoid_threshold: 200     # Depth pixels for wall detection
+  # Waypoint-following controller (calibrate in-game):
+  nav_turn_gain: 1.6            # Mouse counts emitted per degree of heading error
+  nav_max_turn: 22              # Per-tick turn clamp (smoothness)
+  nav_invert_turn: false        # Flip if the bot consistently turns AWAY from its path

@@ -69,7 +69,19 @@ def test_cubic_bezier():
 
 
 def test_screen_delta_to_mouse():
+    # FOV-based conversion: pixel offset -> angle (via focal length) -> mouse counts.
+    # focal = (3440/2) / tan(45deg) = 1720
+    # angle_x = atan2(100, 1720) = 3.328deg -> 3.328 / (2.0*0.022) = 75
     dx, dy = screen_delta_to_mouse(100, 50, 2.0, 0.022, 0.022)
-    # Should be roughly 100 / (2.0 * 0.022) = 2272
-    assert dx == int(100 / (2.0 * 0.022))
-    assert dy == int(50 / (2.0 * 0.022))
+
+    import math
+    focal = (3440 / 2.0) / math.tan(math.radians(45.0))
+    expected_dx = int(math.degrees(math.atan2(100, focal)) / (2.0 * 0.022))
+    expected_dy = int(math.degrees(math.atan2(50, focal)) / (2.0 * 0.022))
+    assert dx == expected_dx
+    assert dy == expected_dy
+
+    # Smaller pixel deltas must produce smaller mouse moves (monotonic), and
+    # the near-crosshair regime stays roughly linear.
+    assert dx == 75 and dy == 37
+    assert abs(dx) < abs(screen_delta_to_mouse(300, 50, 2.0, 0.022, 0.022)[0])
