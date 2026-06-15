@@ -69,7 +69,25 @@ def main():
         "--max-step", type=int, default=60, help="Max mouse counts moved per tick (anti-snap cap)"
     )
     ap.add_argument(
-        "--deadzone", type=float, default=14.0, help="Screen px from target where the pull stops"
+        "--deadzone", type=float, default=6.0, help="Screen px from target where the pull stops"
+    )
+    ap.add_argument(
+        "--track-radius",
+        type=float,
+        default=130.0,
+        help="Within this px of target, pull harder (sticky tracking) to hold the lock",
+    )
+    ap.add_argument(
+        "--track-strength",
+        type=float,
+        default=0.50,
+        help="Pull fraction used once the crosshair is inside track-radius",
+    )
+    ap.add_argument(
+        "--lead",
+        type=float,
+        default=0.05,
+        help="Seconds of motion to lead a moving target (aim where it's going, 0 = off)",
     )
     ap.add_argument("--head", action="store_true", help="Aim head instead of chest")
     ap.add_argument("--scale", type=float, default=0.5, help="Debug window scale")
@@ -119,6 +137,10 @@ def main():
 
     fps_t, frames, fps = time.perf_counter(), 0, 0.0
     start = time.perf_counter()
+    # Target-velocity state for lead prediction (aim where it's heading).
+    prev_aim = None
+    prev_aim_t = 0.0
+    vel_x = vel_y = 0.0
     while True:
         if user32.GetAsyncKeyState(END_VK) & 0x8000:
             break
@@ -145,12 +167,38 @@ def main():
         held = bool(user32.GetAsyncKeyState(activate_vk) & 0x8000)
         pulling = False
         screen_dist = 0.0
-        if target is not None and held:
+
+        # Track on-screen target velocity every frame (independent of `held`), so
+        # the lead estimate is warm the instant you press the key. Reset velocity
+        # when the aim point jumps far -- that's a target switch, not motion.
+        now_t = time.perf_counter()
+        if target is not None:
             aim_x, aim_y = bbox_to_aim_point(
                 target.x1, target.y1, target.x2, target.y2, head_aim=args.head
             )
-            dx_pixels = aim_x - cx
-            dy_pixels = aim_y - cy
+            if prev_aim is not None:
+                dt = now_t - prev_aim_t
+                jump = distance((aim_x, aim_y), prev_aim)
+                if dt > 0 and jump < 250:
+                    # Low-pass the velocity so it doesn't whip around on jitter.
+                    vx = (aim_x - prev_aim[0]) / dt
+                    vy = (aim_y - prev_aim[1]) / dt
+                    vel_x = 0.5 * vel_x + 0.5 * vx
+                    vel_y = 0.5 * vel_y + 0.5 * vy
+                else:
+                    vel_x = vel_y = 0.0  # new target / detection gap
+            prev_aim = (aim_x, aim_y)
+            prev_aim_t = now_t
+        else:
+            prev_aim = None
+            vel_x = vel_y = 0.0
+
+        if target is not None and held:
+            # Lead the target: aim where it's heading, not where it was last frame.
+            lead_x = aim_x + vel_x * args.lead
+            lead_y = aim_y + vel_y * args.lead
+            dx_pixels = lead_x - cx
+            dy_pixels = lead_y - cy
             screen_dist = distance((cx, cy), (aim_x, aim_y))
 
             if screen_dist > args.deadzone:
@@ -165,9 +213,11 @@ def main():
                     game["fov_horizontal"],
                     scale=0.85,
                 )
-                # Fractional pull, capped so a far target is dragged in, not snapped.
-                step_dx = mouse_dx * args.strength
-                step_dy = mouse_dy * args.strength
+                # Sticky once locked: pull harder inside track-radius to hold the
+                # target through your own movement; gentler when acquiring far.
+                strength = args.track_strength if screen_dist < args.track_radius else args.strength
+                step_dx = mouse_dx * strength
+                step_dy = mouse_dy * strength
                 step_dx = max(-args.max_step, min(args.max_step, step_dx))
                 step_dy = max(-args.max_step, min(args.max_step, step_dy))
                 ix, iy = int(round(step_dx)), int(round(step_dy))
