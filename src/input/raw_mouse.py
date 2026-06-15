@@ -27,6 +27,7 @@ WNDPROC = ctypes.WINFUNCTYPE(
 )
 
 user32 = ctypes.windll.user32
+kernel32 = ctypes.windll.kernel32
 
 
 class RAWINPUTDEVICE(ctypes.Structure):
@@ -80,6 +81,46 @@ class WNDCLASS(ctypes.Structure):
     ]
 
 
+# Declare Win32 prototypes. Without these, ctypes assumes 32-bit int args and
+# either overflows on 64-bit pointer params (HWND/LPARAM) or truncates returned
+# handles -- which is what crashed DefWindowProcW and would have broken capture.
+_HWND, _UINT, _DWORD = wintypes.HWND, wintypes.UINT, wintypes.DWORD
+_WPARAM, _LPARAM, _LPVOID = wintypes.WPARAM, wintypes.LPARAM, wintypes.LPVOID
+_PMSG = ctypes.POINTER(wintypes.MSG)
+
+user32.DefWindowProcW.restype = LRESULT
+user32.DefWindowProcW.argtypes = [_HWND, _UINT, _WPARAM, _LPARAM]
+user32.RegisterClassW.restype = wintypes.ATOM
+user32.RegisterClassW.argtypes = [ctypes.POINTER(WNDCLASS)]
+user32.CreateWindowExW.restype = _HWND
+user32.CreateWindowExW.argtypes = [
+    _DWORD,
+    wintypes.LPCWSTR,
+    wintypes.LPCWSTR,
+    _DWORD,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    ctypes.c_int,
+    _HWND,
+    wintypes.HMENU,
+    wintypes.HINSTANCE,
+    _LPVOID,
+]
+user32.RegisterRawInputDevices.restype = wintypes.BOOL
+user32.RegisterRawInputDevices.argtypes = [ctypes.POINTER(RAWINPUTDEVICE), _UINT, _UINT]
+user32.GetRawInputData.restype = _UINT
+user32.GetRawInputData.argtypes = [wintypes.HANDLE, _UINT, _LPVOID, ctypes.POINTER(_UINT), _UINT]
+user32.GetMessageW.restype = ctypes.c_int
+user32.GetMessageW.argtypes = [_PMSG, _HWND, _UINT, _UINT]
+user32.TranslateMessage.argtypes = [_PMSG]
+user32.DispatchMessageW.restype = LRESULT
+user32.DispatchMessageW.argtypes = [_PMSG]
+user32.PostMessageW.argtypes = [_HWND, _UINT, _WPARAM, _LPARAM]
+kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+
+
 class RawMouseListener:
     """Background Raw Input listener accumulating relative mouse motion."""
 
@@ -123,7 +164,7 @@ class RawMouseListener:
             return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
 
         self._wndproc_ref = WNDPROC(wndproc)
-        hinst = ctypes.windll.kernel32.GetModuleHandleW(None)
+        hinst = kernel32.GetModuleHandleW(None)
         cls = WNDCLASS()
         cls.lpfnWndProc = self._wndproc_ref
         cls.hInstance = hinst
