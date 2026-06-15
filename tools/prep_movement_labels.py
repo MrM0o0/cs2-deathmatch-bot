@@ -38,6 +38,47 @@ MIN_RESPONSE = 0.10
 # Clip wild outliers before bucketing.
 CLIP = 25.0
 
+# Filtering: a frame is "moving" if WASD held or the mouse turned at least this
+# much (counts) -- otherwise it's idle/camping and dropped. Combat frames (fire
+# or a visible enemy) are dropped with a margin so the model never learns to
+# spray/counter-strafe while roaming.
+IDLE_MOUSE = 30.0
+COMBAT_MARGIN = 8  # frames (~0.4s) dropped around each combat frame
+
+
+def _dilate(mask: np.ndarray, margin: int) -> np.ndarray:
+    """Grow True regions by `margin` frames on each side (1D)."""
+    out = mask.copy()
+    for s in range(1, margin + 1):
+        out[s:] |= mask[:-s]
+        out[:-s] |= mask[s:]
+    return out
+
+
+def _yolo_enemy_mask(names: list, frames_dir: str) -> np.ndarray:
+    """True where the YOLO detector sees an enemy (combat). Slow; opt-in."""
+    import yaml
+
+    from src.vision.detector import YOLODetector
+
+    cfg = yaml.safe_load(open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")))["detection"]
+    det = YOLODetector(
+        model_path=os.path.join(PROJECT_ROOT, cfg["model_path"]),
+        input_size=cfg["input_size"],
+        confidence_threshold=0.35,
+        nms_threshold=cfg["nms_threshold"],
+        classes=cfg["classes"],
+    )
+    det.load()
+    mask = np.zeros(len(names), dtype=bool)
+    for i, n in enumerate(names):
+        img = cv2.imread(os.path.join(frames_dir, n))
+        mask[i] = bool(det.detect(img))
+        if i % 500 == 0:
+            print(f"\r[prep] yolo scan {i}/{len(names)}", end="")
+    print()
+    return mask
+
 
 def _bucket(dx: float) -> int:
     if dx <= -HARD:
@@ -84,7 +125,7 @@ def _turn_from_mouse(acts: list) -> list[int]:
     return [bucket(float(v)) for v in mdx]
 
 
-def prep(session_dir: str) -> None:
+def prep(session_dir: str, yolo: bool = False) -> None:
     acts = [json.loads(line) for line in open(os.path.join(session_dir, "actions.jsonl"))]
     frames_dir = os.path.join(session_dir, "frames")
 
@@ -121,25 +162,55 @@ def prep(session_dir: str) -> None:
         keys = a["keys"]  # [w,a,s,d,shift,ctrl,m4,m5]
         crouch = 1 if (keys[5] or keys[6] or keys[7]) else 0
         labels.append([keys[0], keys[1], keys[2], keys[3], crouch, t])
-
     arr = np.array(labels, dtype=np.int16)
-    out = os.path.join(session_dir, "labels.npy")
-    np.save(out, arr)
+    frame_names = [a["f"] for a in acts]
+    n = len(arr)
+
+    # --- Build the keep mask (drop idle/camping and combat frames) ----------
+    wasd = arr[:, :4].any(axis=1)
+    if "m" in acts[0]:
+        turning = np.abs(np.array([a["m"][0] for a in acts])) >= IDLE_MOUSE
+    else:
+        turning = arr[:, 5] != 2  # non-straight from optical flow
+    moving = wasd | turning
+
+    combat = np.zeros(n, dtype=bool)
+    if "fire" in acts[0]:
+        combat |= _dilate(np.array([a["fire"] for a in acts], dtype=bool), COMBAT_MARGIN)
+    if yolo:
+        combat |= _dilate(_yolo_enemy_mask(frame_names, frames_dir), COMBAT_MARGIN)
+
+    keep = moving & ~combat
+    if keep.sum() < 50:  # safety: never emit an empty/tiny set
+        print("[prep] WARNING: filter kept <50 frames; keeping all instead")
+        keep = np.ones(n, dtype=bool)
+
+    arr = arr[keep]
+    kept_names = [fn for fn, k in zip(frame_names, keep) if k]
+    np.save(os.path.join(session_dir, "labels.npy"), arr)
+    with open(os.path.join(session_dir, "frames.txt"), "w") as f:
+        f.write("\n".join(kept_names))
 
     names = ["hardL", "left", "straight", "right", "hardR"]
-    print(f"[prep] {len(arr)} labels -> {out}")
-    print("[prep] turn-class distribution:")
+    print(
+        f"[prep] kept {keep.sum()}/{n} frames "
+        f"(dropped idle {100 * np.mean(~moving):.0f}%, combat {100 * np.mean(combat):.0f}%)"
+    )
+    print("[prep] turn-class distribution (kept):")
     for c in range(5):
         print(f"    {names[c]:9} {100 * np.mean(arr[:, 5] == c):5.1f}%")
-    print(
-        f"[prep] WASD active rate: {100 * np.mean(arr[:, :4].any(axis=1)):.1f}%  "
-        f"crouch: {100 * np.mean(arr[:, 4]):.1f}%"
-    )
+    print(f"[prep] WASD active: {100 * np.mean(arr[:, :4].any(axis=1)):.1f}%")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build turn labels for a movement recording")
     parser.add_argument("--session", default=None, help="Session dir (default: newest)")
+    parser.add_argument(
+        "--yolo",
+        action="store_true",
+        help="Also drop frames where YOLO sees an enemy (slow; for sessions "
+        "recorded before the fire-flag)",
+    )
     args = parser.parse_args()
 
     base = os.path.join(PROJECT_ROOT, "data", "movement")
@@ -147,4 +218,4 @@ if __name__ == "__main__":
     if session is None:
         sessions = sorted(d for d in os.listdir(base) if os.path.isdir(os.path.join(base, d)))
         session = os.path.join(base, sessions[-1])
-    prep(session)
+    prep(session, yolo=args.yolo)

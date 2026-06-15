@@ -76,19 +76,41 @@ def export_onnx(net, out_path):
 
 
 def load_dataset(data_dir):
+    """Load one session. Uses frames.txt (the kept, filtered frames) if present,
+    else falls back to every frame in the dir."""
     labels = np.load(os.path.join(data_dir, "labels.npy"))  # (N, 6)
     frames_dir = os.path.join(data_dir, "frames")
-    names = sorted(os.path.basename(p) for p in glob.glob(os.path.join(frames_dir, "*.jpg")))
-    assert len(names) == len(labels), f"{len(names)} frames vs {len(labels)} labels"
+    list_path = os.path.join(data_dir, "frames.txt")
+    if os.path.exists(list_path):
+        names = [ln for ln in open(list_path).read().splitlines() if ln]
+    else:
+        names = sorted(os.path.basename(p) for p in glob.glob(os.path.join(frames_dir, "*.jpg")))
+    assert len(names) == len(labels), f"{data_dir}: {len(names)} frames vs {len(labels)} labels"
     x = np.empty((len(names), H, W, 3), dtype=np.uint8)
     for i, name in enumerate(names):
         x[i] = cv2.imread(os.path.join(frames_dir, name))
     return x, labels
 
 
+def load_many(dirs):
+    """Concatenate several sessions into one dataset."""
+    xs, ys = [], []
+    for d in dirs:
+        x, y = load_dataset(d)
+        print(f"[train]   {d}: {len(x)} frames")
+        xs.append(x)
+        ys.append(y)
+    return np.concatenate(xs), np.concatenate(ys)
+
+
 def main():
     ap = argparse.ArgumentParser(description="Train the BC movement model")
-    ap.add_argument("--data", required=True, help="Recording dir (frames/ + labels.npy)")
+    ap.add_argument(
+        "--data",
+        required=True,
+        nargs="+",
+        help="One or more recording dirs (frames/ + labels.npy + frames.txt)",
+    )
     ap.add_argument("--epochs", type=int, default=15)
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--lr", type=float, default=1e-3)
@@ -100,8 +122,8 @@ def main():
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"[train] device: {dev}")
 
-    x, y = load_dataset(args.data)
-    print(f"[train] {len(x)} samples")
+    x, y = load_many(args.data)
+    print(f"[train] {len(x)} samples from {len(args.data)} session(s)")
     # NHWC uint8 -> NCHW float [0,1]
     xt = torch.from_numpy(x).float().div_(255).permute(0, 3, 1, 2).contiguous()
     keys_t = torch.from_numpy(y[:, :5]).float()
@@ -144,6 +166,16 @@ def main():
         with torch.set_grad_enabled(train):
             for xb, kb, tb in loader:
                 xb, kb, tb = xb.to(dev), kb.to(dev), tb.to(dev)
+                if train:
+                    # Horizontal-flip augmentation: mirror ~half the batch, swap
+                    # A<->D and left<->right. Doubles effective data and enforces
+                    # left/right symmetry (kills the directional-collapse failure).
+                    m = torch.rand(xb.size(0), device=dev) < 0.5
+                    if m.any():
+                        xb, kb, tb = xb.clone(), kb.clone(), tb.clone()
+                        xb[m] = torch.flip(xb[m], dims=[3])
+                        kb[m] = kb[m][:, [0, 3, 2, 1, 4]]
+                        tb[m] = 4 - tb[m]
                 kl, tl = net(xb)
                 loss = key_loss(kl, kb) + turn_loss(tl, tb)
                 if train:
