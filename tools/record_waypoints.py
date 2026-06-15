@@ -93,7 +93,7 @@ def load_minimap_reader() -> tuple[MinimapReader, dict]:
 
 def record(map_name: str, drop_dist: float, merge_dist: float,
            preview: bool, monitor: int, countdown: int = 5,
-           preview_secs: int = 12) -> None:
+           preview_secs: int = 12, record_secs: int = 0) -> None:
     reader, cfg = load_minimap_reader()
     monitor = monitor if monitor is not None else cfg["display"]["monitor"]
 
@@ -146,6 +146,16 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
     if preview and preview_secs > 0:
         print(f"[Recorder] Walk around for {preview_secs}s...")
 
+    def save_graph() -> None:
+        graph.save(out_path)
+        edges = sum(len(w.neighbors) for w in graph.waypoints.values()) // 2
+        print(f"\n[Recorder] Saved {len(graph.waypoints)} nodes / "
+              f"{edges} edges -> {out_path}")
+
+    record_deadline = (time.perf_counter() + record_secs) if (not preview and record_secs > 0) else None
+    if record_deadline is not None:
+        print(f"[Recorder] Auto-saving after {record_secs}s -- walk the routes now.")
+
     try:
         while True:
             frame = capture.grab()
@@ -162,6 +172,10 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
                     break
                 time.sleep(0.1)
                 continue
+
+            if record_deadline is not None and time.perf_counter() >= record_deadline:
+                save_graph()
+                break
 
             # Only consider dropping a node once we've travelled far enough.
             if last_node is not None and distance((x, y), last_node.pos()) < drop_dist:
@@ -187,10 +201,7 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
 
     except KeyboardInterrupt:
         if not preview:
-            graph.save(out_path)
-            edges = sum(len(w.neighbors) for w in graph.waypoints.values()) // 2
-            print(f"\n[Recorder] Saved {len(graph.waypoints)} nodes / "
-                  f"{edges} edges -> {out_path}")
+            save_graph()
         else:
             _preview_verdict(preview_trail)
     finally:
@@ -211,7 +222,9 @@ if __name__ == "__main__":
                        help="Seconds to count down after ENTER (0 to skip the wait)")
     parser.add_argument("--duration", type=int, default=12,
                        help="Preview: seconds to capture then auto-report (0 = until Ctrl+C)")
+    parser.add_argument("--record-secs", type=int, default=0,
+                       help="Recording: auto-save after this many seconds (0 = until Ctrl+C)")
     args = parser.parse_args()
 
     record(args.map, args.drop_dist, args.merge_dist, args.preview, args.monitor,
-           args.countdown, args.duration)
+           args.countdown, args.duration, args.record_secs)
