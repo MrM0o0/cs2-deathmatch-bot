@@ -110,13 +110,14 @@ def main():
 
     _countdown(user32, args.countdown if not args.test else 3)
     if args.test:
-        print("[record] TEST mode: press W/A/S/D/space/ctrl/shift, watch the vector. END to quit.")
+        print("[record] TEST mode: tap/hold W/A/S/D/shift/m5, watch the vector. END to quit.")
 
     interval = 1.0 / SAMPLE_HZ
     idx = 0
     t_start = time.perf_counter()
     last_fps_print = t_start
     frames_since = 0
+    seen = [0] * len(KEYS)  # keys touched since the last test print (catches taps)
     try:
         while True:
             tick = time.perf_counter()
@@ -135,12 +136,14 @@ def main():
 
             if args.test:
                 frames_since += 1
+                seen = [s | k for s, k in zip(seen, keys)]
                 if tick - last_fps_print >= 0.5:
                     fps = frames_since / (tick - last_fps_print)
-                    pressed = [name for (name, _), k in zip(KEYS, keys) if k]
-                    print(f"\r[record] {fps:4.1f} fps  held={pressed!s:30}", end="")
+                    touched = [name for (name, _), k in zip(KEYS, seen) if k]
+                    print(f"\r[record] {fps:4.1f} fps  touched={touched!s:34}", end="")
                     last_fps_print = tick
                     frames_since = 0
+                    seen = [0] * len(KEYS)
             else:
                 small = cv2.resize(frame, (FRAME_W, FRAME_H), interpolation=cv2.INTER_AREA)
                 name = f"{idx:06d}.jpg"
