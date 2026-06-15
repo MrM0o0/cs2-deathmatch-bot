@@ -197,7 +197,7 @@ class NavigationController:
     def __init__(self, graph: WaypointGraph, reach_dist: float = 40.0,
                  turn_gain: float = 1.6, max_turn: int = 22,
                  move_threshold: float = 3.0, history: int = 30,
-                 invert_turn: bool = False):
+                 invert_turn: bool = False, turn_deadzone: float = 18.0):
         """
         Args:
             graph: Waypoint graph to navigate.
@@ -218,6 +218,7 @@ class NavigationController:
         self.max_turn = max_turn
         self.move_threshold = move_threshold
         self.invert_turn = invert_turn
+        self.turn_deadzone = turn_deadzone
 
         self._positions: deque[tuple[float, float]] = deque(maxlen=max(2, history))
         self._heading: float | None = None
@@ -271,9 +272,15 @@ class NavigationController:
 
         yaw_error = normalize_angle(target_heading - self._heading)
 
-        turn = int(clamp(yaw_error * self.turn_gain, -self.max_turn, self.max_turn))
-        if self.invert_turn:
-            turn = -turn
+        # Deadzone: when roughly aligned, stop turning and walk straight. The
+        # motion-derived heading lags, so turning right up to 0 error overshoots
+        # and the bot circles; walking straight lets the estimate settle first.
+        if abs(yaw_error) <= self.turn_deadzone:
+            turn = 0
+        else:
+            turn = int(clamp(yaw_error * self.turn_gain, -self.max_turn, self.max_turn))
+            if self.invert_turn:
+                turn = -turn
 
         cmd = {
             "turn_x": turn,
@@ -283,14 +290,14 @@ class NavigationController:
             "has_route": True,
         }
 
-        abs_err = abs(yaw_error)
-        if abs_err > 150:
-            # Target is nearly behind us: turn in place first, don't walk into
-            # whatever is ahead.
-            return cmd
+        # ALWAYS keep walking while turning. Heading is derived from how the
+        # dot *moves*, so if the bot ever stops to "turn in place" the estimate
+        # freezes and it spins forever (target stays behind). Walking + turning
+        # arcs toward the target and keeps the heading estimate alive.
         cmd["forward"] = True
-        # Mild strafe to round corners naturally instead of pivoting robotically.
-        if 35 < abs_err <= 150:
+        abs_err = abs(yaw_error)
+        if abs_err > 35:
+            # Strafe toward the turn to tighten the arc / round corners.
             if yaw_error > 0:
                 cmd["right"] = True
             else:

@@ -123,17 +123,19 @@ def test_turn_inverts_with_flag():
     assert c1["turn_x"] == -c2["turn_x"]
 
 
-def test_target_behind_turns_in_place():
+def test_target_behind_keeps_walking_while_turning():
     g = _grid_graph(5)
     nav = NavigationController(g, move_threshold=2.0)
     for x in range(0, 60, 10):
         nav.update((float(x), 0.0))  # heading east
-    # Goal due west -> error ~180 -> turn first, don't walk forward.
+    # Goal due west -> error ~180. Must KEEP walking (so heading stays live)
+    # while turning hard, not freeze in place -- that caused the spin spiral.
     nav._route = [g.nearest(50, 0).id, g.nearest(0, 0).id]
     nav._route_idx = 1
     cmd = nav.update((50.0, 0.0))
     assert abs(cmd["yaw_error_deg"]) > 150
-    assert cmd["forward"] is False
+    assert cmd["forward"] is True
+    assert cmd["turn_x"] != 0  # turning hard toward the target
 
 
 def test_no_waypoints_is_idle():

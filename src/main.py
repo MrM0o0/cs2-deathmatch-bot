@@ -3,6 +3,7 @@
 import ctypes
 import os
 import sys
+import threading
 import time
 import yaml
 import random
@@ -189,6 +190,9 @@ class Bot:
         self.running = True
         self._loop_start = time.perf_counter()
         self._max_run_seconds = self.config["bot"].get("max_run_seconds", 120)
+        # Dedicated watchdog thread polls the panic key every 20ms, independent
+        # of the (sometimes slow) main loop, and force-exits. Can't be starved.
+        threading.Thread(target=self._panic_watchdog, daemon=True).start()
         print("[Bot] Ready.")
         print(f"[Bot] *** PANIC: press {PANIC_KEY_NAME} (or Ctrl+C in terminal) "
               f"to STOP instantly -- works even with CS2 focused. ***")
@@ -202,6 +206,30 @@ class Bot:
             print("\n[Bot] Stopped by user.")
         finally:
             self.stop()
+
+    def _panic_watchdog(self) -> None:
+        """Force-stop the bot the instant the panic key is pressed.
+
+        Runs in its own thread polling every 20ms, so a slow/blocked main loop
+        can never delay it. Releases all input, then hard-exits the process.
+        """
+        user32 = ctypes.windll.user32
+        while self.running:
+            if user32.GetAsyncKeyState(PANIC_VK) & 0x8000:
+                print(f"\n[Bot] PANIC ({PANIC_KEY_NAME}) -- force stopping NOW.")
+                self.running = False
+                for cleanup in (self._stop_firing, self._release_all_movement,
+                                keyboard.release_all):
+                    try:
+                        cleanup()
+                    except Exception:
+                        pass
+                try:
+                    self.logger.close()
+                except Exception:
+                    pass
+                os._exit(0)
+            time.sleep(0.02)
 
     def _should_abort(self) -> bool:
         """True if the panic key is down or the run time limit was hit."""
