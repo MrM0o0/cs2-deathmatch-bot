@@ -27,9 +27,52 @@ import os
 
 import cv2
 import numpy as np
+import torch
+import torch.nn as nn
 
 H, W = 90, 160
 TURN_CLASSES = 5
+
+
+class MoveNet(nn.Module):
+    """Small CNN: frame -> (key logits [w,a,s,d,crouch], turn logits [5])."""
+
+    def __init__(self):
+        super().__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(3, 16, 5, 2, 2),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, 3, 2, 1),
+            nn.ReLU(),
+            nn.Conv2d(32, 64, 3, 2, 1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d((4, 6)),
+            nn.Flatten(),
+        )
+        self.trunk = nn.Sequential(nn.Linear(64 * 4 * 6, 128), nn.ReLU(), nn.Dropout(0.3))
+        self.keys = nn.Linear(128, 5)
+        self.turn = nn.Linear(128, TURN_CLASSES)
+
+    def forward(self, z):
+        z = self.trunk(self.features(z))
+        return self.keys(z), self.turn(z)
+
+
+def export_onnx(net, out_path):
+    """Export to ONNX. Uses the dynamo exporter (handles adaptive pooling)."""
+    net.eval().cpu()
+    dummy = torch.zeros(1, 3, H, W)
+    torch.onnx.export(
+        net,
+        dummy,
+        out_path,
+        input_names=["frame"],
+        output_names=["keys_logits", "turn_logits"],
+        dynamic_axes={"frame": {0: "batch"}},
+        opset_version=18,
+        dynamo=True,
+    )
+    print(f"[train] exported {out_path}")
 
 
 def load_dataset(data_dir):
@@ -52,8 +95,6 @@ def main():
     ap.add_argument("--out", default="movement.onnx")
     args = ap.parse_args()
 
-    import torch
-    import torch.nn as nn
     from torch.utils.data import DataLoader, TensorDataset
 
     dev = "cuda" if torch.cuda.is_available() else "cpu"
@@ -86,27 +127,6 @@ def main():
     turn_weight = (turn_counts.sum() / (TURN_CLASSES * turn_counts.clamp(min=1))).to(dev)
     print(f"[train] key pos_weight={pos_weight.tolist()}")
     print(f"[train] turn weight={turn_weight.tolist()}")
-
-    class MoveNet(nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.features = nn.Sequential(
-                nn.Conv2d(3, 16, 5, 2, 2),
-                nn.ReLU(),
-                nn.Conv2d(16, 32, 3, 2, 1),
-                nn.ReLU(),
-                nn.Conv2d(32, 64, 3, 2, 1),
-                nn.ReLU(),
-                nn.AdaptiveAvgPool2d((4, 6)),
-                nn.Flatten(),
-            )
-            self.trunk = nn.Sequential(nn.Linear(64 * 4 * 6, 128), nn.ReLU(), nn.Dropout(0.3))
-            self.keys = nn.Linear(128, 5)
-            self.turn = nn.Linear(128, TURN_CLASSES)
-
-        def forward(self, z):
-            z = self.trunk(self.features(z))
-            return self.keys(z), self.turn(z)
 
     net = MoveNet().to(dev)
     opt = torch.optim.Adam(net.parameters(), lr=args.lr)
@@ -141,19 +161,14 @@ def main():
             f"val_turn_acc={vt_:.2f} val_key_acc(wasd,cr)=[{kacc}]"
         )
 
-    # Export ONNX (dynamic batch; matches the onnxruntime stack the bot already uses).
-    net.eval().cpu()
-    dummy = torch.zeros(1, 3, H, W)
-    torch.onnx.export(
-        net,
-        dummy,
-        args.out,
-        input_names=["frame"],
-        output_names=["keys_logits", "turn_logits"],
-        dynamic_axes={"frame": {0: "batch"}},
-        opset_version=17,
-    )
-    print(f"[train] exported {args.out}")
+    # Save a checkpoint FIRST so a flaky export never costs us a training run.
+    ckpt = os.path.splitext(args.out)[0] + ".pt"
+    torch.save(net.state_dict(), ckpt)
+    print(f"[train] saved checkpoint {ckpt}")
+    try:
+        export_onnx(net, args.out)
+    except Exception as e:
+        print(f"[train] ONNX export failed ({e}); checkpoint {ckpt} is safe.")
     print("[train] keys order = [w, a, s, d, crouch]; turn = [hardL, left, straight, right, hardR]")
 
 

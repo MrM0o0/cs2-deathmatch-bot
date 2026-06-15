@@ -34,6 +34,7 @@ from src.humanizer.noise import NoiseGenerator
 from src.humanizer.personality import load_personality
 from src.humanizer.timing import ReactionTimer
 from src.input import keyboard, mouse
+from src.movement.bc_policy import BCMovementPolicy
 from src.movement.explorer import WallFollower
 from src.movement.navigator import NavigationController, WaypointGraph
 from src.movement.stuck_detector import StuckDetector
@@ -140,6 +141,18 @@ class Bot:
             max_turn=nav_cfg.get("nav_max_turn", 22),
             invert_turn=nav_cfg.get("nav_invert_turn", False),
         )
+
+        # Movement mode: "waypoint" (hand-written nav) or "bc" (learned policy).
+        self.movement_mode = self.config["bot"].get("movement_mode", "waypoint")
+        self.bc_policy = None
+        if self.movement_mode == "bc":
+            bc = self.config.get("bc_movement", {})
+            self.bc_policy = BCMovementPolicy(
+                os.path.join(PROJECT_ROOT, bc.get("model_path", "models/movement.onnx")),
+                mild_turn=bc.get("mild_turn", 150),
+                hard_turn=bc.get("hard_turn", 400),
+                invert_turn=bc.get("invert_turn", False),
+            )
         self.stuck_detector = StuckDetector(
             timeout=nav_cfg["stuck_timeout"],
         )
@@ -191,6 +204,15 @@ class Bot:
         except Exception as e:
             print(f"[Bot] WARNING: Detector failed to load: {e}")
             print("[Bot] Running without detection (debug/movement only)")
+
+        # Load the learned movement policy, or fall back to waypoint nav.
+        if self.bc_policy is not None:
+            try:
+                self.bc_policy.load()
+                print("[Bot] Movement: behavioural-cloning policy")
+            except Exception as e:
+                print(f"[Bot] WARNING: BC policy failed to load ({e}); using waypoint nav")
+                self.bc_policy = None
 
         # Load waypoints if available
         map_name = "dust2"  # TODO: auto-detect map
@@ -518,6 +540,25 @@ class Bot:
 
     def _roam(self, frame, keybinds: dict) -> None:
         """Handle roaming movement."""
+        # Learned behavioural-cloning policy takes priority when loaded.
+        if self.bc_policy is not None:
+            cmd = self.bc_policy.act(frame)
+            self._last_nav_cmd = cmd
+            self._release_all_movement()
+            for flag, bind in (
+                ("forward", "forward"),
+                ("back", "back"),
+                ("left", "left"),
+                ("right", "right"),
+                ("crouch", "crouch"),
+            ):
+                if cmd.get(flag):
+                    keyboard.hold_key(keybinds[bind])
+                    self._movement_keys_held.add(keybinds[bind])
+            if cmd["turn_x"] != 0:
+                mouse.move_relative(cmd["turn_x"], 0)
+            return
+
         # Use waypoint navigation if available
         if self.nav_controller.has_waypoints():
             pos, _ = self.minimap_reader.read(frame)

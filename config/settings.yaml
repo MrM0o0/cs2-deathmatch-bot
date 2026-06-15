@@ -67,6 +67,14 @@ bot:
   debug_overlay: true
   debug_log: true
   max_run_seconds: 120           # Failsafe: auto-stop after N seconds (0 = no limit)
+  movement_mode: "waypoint"      # "waypoint" (hand-written nav) or "bc" (learned model)
+
+# Learned movement policy (used when bot.movement_mode == "bc")
+bc_movement:
+  model_path: "models/movement.onnx"
+  mild_turn: 150                 # mouse counts/tick for left/right turn classes
+  hard_turn: 400                 # mouse counts/tick for hard-turn classes
+  invert_turn: false             # flip if the bot turns away from where it should
 
 navigation:
   stuck_timeout: 2.0            # Seconds before stuck recovery
