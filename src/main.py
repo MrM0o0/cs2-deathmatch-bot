@@ -189,6 +189,8 @@ class Bot:
         self._movement_keys_held: set[str] = set()
         self._tick_count = 0
         self.paused = False
+        self._is_stuck = False
+        self._nudge_ticks = 0  # BC-mode unstick: commit to a turn sweep when jammed
 
     def start(self) -> None:
         """Initialize all systems and start the main loop."""
@@ -330,9 +332,13 @@ class Bot:
             # 3. Read HUD
             hud = self.hud_reader.read(frame)
 
-            # 4. Check stuck
+            # 4. Check stuck.
             is_moving = len(self._movement_keys_held) > 0
-            is_stuck = self.stuck_detector.update(frame, is_moving)
+            self._is_stuck = self.stuck_detector.update(frame, is_moving)
+            # In BC mode the learned policy owns movement, so we keep the legacy
+            # FSM out of STUCK (its backup-into-wall loop hijacked the bot); the
+            # policy's own light turn-nudge handles being jammed instead.
+            is_stuck = False if self.bc_policy is not None else self._is_stuck
 
             # 5. Prioritize targets
             enemies = self.threat_assessor.prioritize_targets(detections)
@@ -373,6 +379,11 @@ class Bot:
                     nav_yaw_err=_round(nav.get("yaw_error_deg")),
                     nav_turn=nav.get("turn_x"),
                     nav_route=nav.get("has_route"),
+                    bc_turn=nav.get("turn_class"),
+                    bc_keys=nav.get("key_probs"),
+                    bc_move=[nav.get("forward"), nav.get("left"), nav.get("back"), nav.get("right")]
+                    if "key_probs" in nav
+                    else None,
                     infer_ms=round(self.detector.inference_ms, 1),
                 )
                 self.logger.maybe_save_frame(
@@ -543,6 +554,23 @@ class Bot:
         # Learned behavioural-cloning policy takes priority when loaded.
         if self.bc_policy is not None:
             cmd = self.bc_policy.act(frame)
+            # Light unstick: when jammed against geometry, commit to a ~0.5s turn
+            # sweep (still moving forward, so it arcs out) instead of the old
+            # backup-into-wall loop. Sustained so the frame-diff clearing doesn't
+            # cut it short after one tick.
+            if self._nudge_ticks <= 0 and self._is_stuck:
+                self._nudge_ticks = 15
+            if self._nudge_ticks > 0:
+                self._nudge_ticks -= 1
+                hard = self.config.get("bc_movement", {}).get("hard_turn", 400)
+                cmd = {
+                    **cmd,
+                    "forward": True,
+                    "back": False,
+                    "left": False,
+                    "right": False,
+                    "turn_x": hard,
+                }
             self._last_nav_cmd = cmd
             self._release_all_movement()
             for flag, bind in (

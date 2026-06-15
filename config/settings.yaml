@@ -67,7 +67,7 @@ bot:
   debug_overlay: true
   debug_log: true
   max_run_seconds: 120           # Failsafe: auto-stop after N seconds (0 = no limit)
-  movement_mode: "waypoint"      # "waypoint" (hand-written nav) or "bc" (learned model)
+  movement_mode: "bc"            # "waypoint" (hand-written nav) or "bc" (learned model)
 
 # Learned movement policy (used when bot.movement_mode == "bc")
 bc_movement:
