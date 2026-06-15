@@ -46,6 +46,7 @@ class Detector(threading.Thread):
         super().__init__(daemon=True)
         self.cfg = cfg
         self.boxes: list[tuple[int, int, int, int, bool, float]] = []
+        self.frames = 0  # capture frames seen -- proves the pipeline is feeding
         self.running = True
 
     def run(self):
@@ -68,6 +69,7 @@ class Detector(threading.Thread):
             if frame is None:
                 time.sleep(0.003)
                 continue
+            self.frames += 1
             dets = conf.update(det.detect(frame))
             self.boxes = [
                 (
@@ -119,11 +121,19 @@ def main():
     canvas = tk.Canvas(root, width=sw, height=sh, bg="black", highlightthickness=0)
     canvas.pack()
 
-    # Make the overlay click-through so input falls through to the game.
-    hwnd = ctypes.windll.user32.GetParent(root.winfo_id()) or root.winfo_id()
-    ex = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-    ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED | WS_EX_TRANSPARENT)
+    root.update_idletasks()  # realize the window so the HWND + styles exist
     user32 = ctypes.windll.user32
+
+    # Make the overlay click-through so input falls through to the game. Target
+    # the real top-level window (GA_ROOT) -- for an overrideredirect window the
+    # GetParent trick can return the wrong handle and the styles silently no-op.
+    hwnd = user32.GetAncestor(root.winfo_id(), 2)  # GA_ROOT
+    ex = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    user32.SetWindowLongW(hwnd, GWL_EXSTYLE, ex | WS_EX_LAYERED | WS_EX_TRANSPARENT)
+    # Changing the style can drop Tk's colour-key transparency, leaving an opaque
+    # black sheet over the game. Re-assert the black colour key explicitly.
+    LWA_COLORKEY = 0x1
+    user32.SetLayeredWindowAttributes(hwnd, 0x000000, 0, LWA_COLORKEY)
 
     def redraw():
         if user32.GetAsyncKeyState(END_VK) & 0x8000:
@@ -132,6 +142,19 @@ def main():
             return
         canvas.delete("all")
         boxes = worker.boxes
+
+        # Always-on proof-of-life HUD (draws even with zero detections). If you
+        # see this but no enemy boxes -> detection found nothing. If you see
+        # nothing at all -> the overlay itself isn't painting over the game.
+        canvas.create_rectangle(8, 8, 360, 56, outline="#00FF00", width=2)
+        canvas.create_text(
+            16,
+            16,
+            anchor="nw",
+            fill="#00FF00",
+            text=f"OVERLAY ALIVE  cap={worker.frames}  boxes={len(boxes)}",
+            font=("Consolas", 14, "bold"),
+        )
         for x1, y1, x2, y2, head, c in boxes:
             colour = "#FFC800" if head else "#FF0000"  # head=orange, body=red
             canvas.create_rectangle(x1, y1, x2, y2, outline=colour, width=3)
