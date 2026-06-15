@@ -8,11 +8,14 @@ import time
 import yaml
 import random
 
-# Panic key: press this any time to instantly stop the bot and release all
-# input, even while CS2 has focus (read globally via GetAsyncKeyState).
-# VK_END = 0x23. Polled every tick.
+# Hotkeys read globally via GetAsyncKeyState, so they work while CS2 has focus.
+# END  -> kill the bot instantly and release all input.
+# HOME -> toggle pause: the bot lets go of mouse/keyboard so you can take over,
+#         press again to hand control back. The process keeps running.
 PANIC_VK = 0x23
 PANIC_KEY_NAME = "END"
+PAUSE_VK = 0x24
+PAUSE_KEY_NAME = "HOME"
 
 # Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -164,6 +167,7 @@ class Bot:
         self._is_firing = False
         self._movement_keys_held: set[str] = set()
         self._tick_count = 0
+        self.paused = False
 
     def start(self) -> None:
         """Initialize all systems and start the main loop."""
@@ -194,8 +198,8 @@ class Bot:
         # of the (sometimes slow) main loop, and force-exits. Can't be starved.
         threading.Thread(target=self._panic_watchdog, daemon=True).start()
         print("[Bot] Ready.")
-        print(f"[Bot] *** PANIC: press {PANIC_KEY_NAME} (or Ctrl+C in terminal) "
-              f"to STOP instantly -- works even with CS2 focused. ***")
+        print(f"[Bot] *** {PANIC_KEY_NAME} = STOP instantly | {PAUSE_KEY_NAME} = "
+              f"pause/resume (take control) -- both work while CS2 is focused. ***")
         if self._max_run_seconds:
             print(f"[Bot] Auto-stops after {self._max_run_seconds}s as a failsafe.")
         print(f"[Bot] Tick rate: {self.config['bot']['tick_rate']} Hz")
@@ -207,28 +211,46 @@ class Bot:
         finally:
             self.stop()
 
+    def _release_input(self) -> None:
+        """Let go of mouse and keyboard (used by pause and panic)."""
+        for cleanup in (self._stop_firing, self._release_all_movement,
+                        keyboard.release_all):
+            try:
+                cleanup()
+            except Exception:
+                pass
+
     def _panic_watchdog(self) -> None:
-        """Force-stop the bot the instant the panic key is pressed.
+        """Handle the global hotkeys: END = kill, HOME = pause/resume toggle.
 
         Runs in its own thread polling every 20ms, so a slow/blocked main loop
-        can never delay it. Releases all input, then hard-exits the process.
+        can never delay it.
         """
         user32 = ctypes.windll.user32
+        prev_pause_down = False
         while self.running:
             if user32.GetAsyncKeyState(PANIC_VK) & 0x8000:
                 print(f"\n[Bot] PANIC ({PANIC_KEY_NAME}) -- force stopping NOW.")
                 self.running = False
-                for cleanup in (self._stop_firing, self._release_all_movement,
-                                keyboard.release_all):
-                    try:
-                        cleanup()
-                    except Exception:
-                        pass
+                self._release_input()
                 try:
                     self.logger.close()
                 except Exception:
                     pass
                 os._exit(0)
+
+            # Edge-detect HOME so a held key toggles once, not every poll.
+            pause_down = bool(user32.GetAsyncKeyState(PAUSE_VK) & 0x8000)
+            if pause_down and not prev_pause_down:
+                self.paused = not self.paused
+                if self.paused:
+                    self._release_input()
+                    print(f"\n[Bot] PAUSED -- input released. {PAUSE_KEY_NAME} "
+                          f"to resume, {PANIC_KEY_NAME} to quit.")
+                else:
+                    print("\n[Bot] RESUMED.")
+            prev_pause_down = pause_down
+
             time.sleep(0.02)
 
     def _should_abort(self) -> bool:
@@ -255,6 +277,11 @@ class Bot:
             if self._should_abort():
                 self.running = False
                 break
+
+            # 0b. Paused (HOME): hold off all input/decisions, keep the loop alive.
+            if self.paused:
+                time.sleep(0.05)
+                continue
 
             # 1. Capture frame
             frame = self.capture.grab()
