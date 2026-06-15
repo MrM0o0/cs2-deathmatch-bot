@@ -50,3 +50,6 @@ cs2 character model recognition.v3i.yolov8.zip
 *.zip
 movement*.png
 original.png
+
+# Movement training data (frames)
+data/movement/
