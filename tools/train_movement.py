@@ -72,6 +72,14 @@ def export_onnx(net, out_path):
         opset_version=18,
         dynamo=True,
     )
+    # The dynamo exporter externalises weights into a sidecar .data file; inline
+    # them so the .onnx is a single self-contained, committable file.
+    import onnx
+
+    onnx.save_model(onnx.load(out_path), out_path, save_as_external_data=False)
+    sidecar = out_path + ".data"
+    if os.path.exists(sidecar):
+        os.remove(sidecar)
     print(f"[train] exported {out_path}")
 
 

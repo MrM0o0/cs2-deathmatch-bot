@@ -53,3 +53,6 @@ original.png
 
 # Movement training data (frames)
 data/movement/
+
+# Stray ONNX external-weight sidecars (we inline weights)
+*.onnx.data
