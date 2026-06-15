@@ -196,7 +196,7 @@ class NavigationController:
 
     def __init__(self, graph: WaypointGraph, reach_dist: float = 40.0,
                  turn_gain: float = 1.6, max_turn: int = 22,
-                 move_threshold: float = 4.0, history: int = 6,
+                 move_threshold: float = 3.0, history: int = 30,
                  invert_turn: bool = False):
         """
         Args:
@@ -207,6 +207,8 @@ class NavigationController:
             move_threshold: Min displacement (px) over the history window before
                 a fresh heading estimate is trusted.
             history: How many recent positions to keep for heading estimation.
+                The radar shows the whole map so the dot moves only a few px/sec
+                -- the window must span ~1s (≈30 ticks) to see real movement.
             invert_turn: Flip turn sign if the minimap rotates opposite to the
                 assumed convention (set during calibration).
         """

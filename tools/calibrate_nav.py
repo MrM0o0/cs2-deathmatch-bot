@@ -36,8 +36,12 @@ from src.input import keyboard, mouse
 
 
 def _measure_heading(capture, reader, keybind_forward: str,
-                     walk_time: float = 0.7, move_thresh: float = 6.0):
-    """Hold forward briefly and estimate heading from net blip displacement."""
+                     walk_time: float = 2.2, move_thresh: float = 4.0):
+    """Hold forward briefly and estimate heading from net blip displacement.
+
+    The radar is zoomed to show the whole map, so the dot only travels a few
+    px/sec -- walk long enough (>2s) to clear the noise floor before measuring.
+    """
     positions = []
     keyboard.hold_key(keybind_forward)
     t0 = time.perf_counter()
@@ -134,7 +138,7 @@ def calibrate(write: bool, test_counts: int, monitor: int, countdown: int = 6) -
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Auto-calibrate nav turn sign + gain")
     parser.add_argument("--write", action="store_true", help="Save results to settings.yaml")
-    parser.add_argument("--counts", type=int, default=400,
+    parser.add_argument("--counts", type=int, default=1500,
                        help="Total mouse counts for the test turn")
     parser.add_argument("--monitor", type=int, default=None, help="Monitor index override")
     parser.add_argument("--countdown", type=int, default=6,
