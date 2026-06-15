@@ -172,7 +172,7 @@ def main():
     )
     ap.add_argument("--deadzone", type=float, default=4.0, help="Screen px where the pull stops")
     ap.add_argument(
-        "--lead", type=float, default=0.04, help="Seconds to lead a moving target (0 = off)"
+        "--lead", type=float, default=0.0, help="Seconds to lead a moving target (0 = off)"
     )
     ap.add_argument("--max-step", type=int, default=18, help="Max mouse counts per control tick")
     ap.add_argument("--fps", type=int, default=144, help="Detection capture rate")
@@ -204,6 +204,11 @@ def main():
 
     period = 1.0 / args.control_hz
     residual_x = residual_y = 0.0
+    # Closed-loop accounting: how much we've already moved toward the CURRENT
+    # detection snapshot. Subtracting this from the gap stops the fast control
+    # loop over-driving past a stale target between detections (the orbit bug).
+    last_stamp = None
+    applied_x = applied_y = 0.0
     toggled_on = False
     key_was_down = False
     last = time.perf_counter()
@@ -236,12 +241,13 @@ def main():
         pulling = False
         if active and snap is not None:
             aim_x, aim_y, vel_x, vel_y, half_w, half_h, stamp = snap
-            # Extrapolate the target to *now* (the detection is a few ms stale)
-            # plus a small lead; clamp the offset to the body so the predicted
-            # point can never leave the target onto a wall.
-            ahead = (now - stamp) + args.lead
-            off_x = max(-half_w, min(half_w, vel_x * ahead))
-            off_y = max(-half_h, min(half_h, vel_y * ahead))
+            if stamp != last_stamp:  # fresh detection -> reset what we've applied
+                last_stamp = stamp
+                applied_x = applied_y = 0.0
+            # Small lead only (clamped to the body); no stale-time extrapolation,
+            # which fed the orbit during your own turns.
+            off_x = max(-half_w, min(half_w, vel_x * args.lead))
+            off_y = max(-half_h, min(half_h, vel_y * args.lead))
             px = aim_x + off_x - cx
             py = aim_y + off_y - cy
             screen_dist = math.hypot(px, py)
@@ -258,22 +264,30 @@ def main():
                     game["fov_horizontal"],
                     scale=0.85,
                 )
+                # Remaining gap = full gap minus what we've already emitted toward
+                # this snapshot. Converges to the target and STOPS, no overshoot.
+                rem_x = gap_dx - applied_x
+                rem_y = gap_dy - applied_y
                 s = args.track_strength if screen_dist < args.track_radius else args.strength
                 # Framerate-independent ease: same feel as `s` per tick at 60 Hz,
                 # but spread over the fast control rate so motion stays smooth.
                 frac = 1.0 - (1.0 - s) ** (dt * REF_HZ)
-                step_dx = gap_dx * frac + residual_x
-                step_dy = gap_dy * frac + residual_y
-                step_dx = max(-args.max_step, min(args.max_step, step_dx))
-                step_dy = max(-args.max_step, min(args.max_step, step_dy))
-                ix, iy = int(step_dx), int(step_dy)
-                residual_x = step_dx - ix  # carry the sub-pixel remainder
-                residual_y = step_dy - iy
+                desired_x = max(-args.max_step, min(args.max_step, rem_x * frac))
+                desired_y = max(-args.max_step, min(args.max_step, rem_y * frac))
+                applied_x += desired_x
+                applied_y += desired_y
+                out_x = desired_x + residual_x
+                out_y = desired_y + residual_y
+                ix, iy = int(out_x), int(out_y)
+                residual_x = out_x - ix  # carry the sub-pixel remainder
+                residual_y = out_y - iy
                 if ix or iy:
                     mouse.move_relative(ix, iy)
                     pulling = True
         else:
             residual_x = residual_y = 0.0
+            applied_x = applied_y = 0.0
+            last_stamp = None
 
         if now - status_t >= 0.5:
             state = "PULL" if pulling else ("ARMED" if active else "idle")
