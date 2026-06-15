@@ -120,11 +120,15 @@ def main():
         TensorDataset(xt[val_idx], keys_t[val_idx], turn_t[val_idx]), batch_size=args.batch
     )
 
-    # Imbalance weights from the training split.
-    key_rate = keys_t[tr_idx].mean(0).clamp(0.02, 0.98)
-    pos_weight = ((1 - key_rate) / key_rate).to(dev)
+    # Imbalance weights from the training split -- GENTLE on purpose. Full
+    # inverse-frequency weighting made the model collapse to always predicting
+    # the most-upweighted rare class (constant hard-left). Cap key weights and
+    # use sqrt-inverse-frequency (also capped) for the turn classes.
+    key_rate = keys_t[tr_idx].mean(0).clamp(0.05, 0.95)
+    pos_weight = ((1 - key_rate) / key_rate).clamp(max=3.0).to(dev)
     turn_counts = torch.bincount(turn_t[tr_idx], minlength=TURN_CLASSES).float()
-    turn_weight = (turn_counts.sum() / (TURN_CLASSES * turn_counts.clamp(min=1))).to(dev)
+    inv_freq = turn_counts.sum() / (TURN_CLASSES * turn_counts.clamp(min=1))
+    turn_weight = inv_freq.sqrt().clamp(max=3.0).to(dev)
     print(f"[train] key pos_weight={pos_weight.tolist()}")
     print(f"[train] turn weight={turn_weight.tolist()}")
 
