@@ -32,16 +32,22 @@ import cv2
 
 from src.capture.screen import ScreenCapture
 
-# Virtual-key codes for the movement keys we clone. Order is fixed -- it defines
-# the label vector the model learns, so don't reorder without retraining.
+# Virtual-key codes for the movement signals we clone. Order is fixed -- it
+# defines the label vector the model learns, so don't reorder without retraining.
+# Note on jump: it's commonly bound to scroll wheel, which is a discrete event
+# with no key-state to poll, so we don't capture it here. The POC clones grounded
+# movement (walk/strafe/crouch/peek); scroll-jump + bhop is a later phase that
+# needs a mouse-wheel hook. Crouch is often a mouse side button -- both side
+# buttons are polled so whichever you use is captured.
 KEYS = [
     ("w", 0x57),
     ("a", 0x41),
     ("s", 0x53),
     ("d", 0x44),
-    ("space", 0x20),  # jump
-    ("ctrl", 0x11),  # crouch
-    ("shift", 0x10),  # walk
+    ("shift", 0x10),  # walk (keyboard)
+    ("ctrl", 0x11),  # crouch (keyboard bind, if any)
+    ("mouse4", 0x05),  # XBUTTON1 -- common crouch bind
+    ("mouse5", 0x06),  # XBUTTON2 -- common crouch bind
 ]
 END_VK = 0x23  # END = stop recording
 
