@@ -36,9 +36,23 @@ class KEYBDINPUT(ctypes.Structure):
     ]
 
 
+class MOUSEINPUT(ctypes.Structure):
+    # Not used directly here, but the INPUT union MUST be sized to its largest
+    # member (MOUSEINPUT). Without it, sizeof(INPUT) is 32 instead of 40 on
+    # 64-bit Windows and SendInput silently rejects every call (returns 0).
+    _fields_ = [
+        ("dx", ctypes.c_long),
+        ("dy", ctypes.c_long),
+        ("mouseData", ctypes.c_ulong),
+        ("dwFlags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.POINTER(ctypes.c_ulong)),
+    ]
+
+
 class INPUT(ctypes.Structure):
     class _INPUT_UNION(ctypes.Union):
-        _fields_ = [("ki", KEYBDINPUT)]
+        _fields_ = [("ki", KEYBDINPUT), ("mi", MOUSEINPUT)]
 
     _fields_ = [
         ("type", ctypes.c_ulong),
@@ -66,7 +80,15 @@ def _send_key_input(scancode: int, key_up: bool = False) -> None:
     )
     inp = INPUT(type=INPUT_KEYBOARD)
     inp.union.ki = ki
-    user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    sent = user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
+    if sent != 1 and not _warned["once"]:
+        print(f"[keyboard] WARNING: SendInput injected {sent}/1 events -- keys "
+              f"are not reaching the game (struct size or focus issue).")
+        _warned["once"] = True
+
+
+# Warn at most once per run so a failure is visible without spamming.
+_warned = {"once": False}
 
 
 def key_down(key: str) -> None:
