@@ -1,18 +1,17 @@
 """Record movement training data: what you see + what you press, while you play.
 
 This is the data-collection step for the behavioural-cloning movement model.
-Play deathmatch normally; it grabs a downscaled frame plus your held movement
-keys ~15 times a second and writes them to disk. Your mouse turns are NOT
-captured here -- they're recovered at training time from how the image shifts
-between frames (phase correlation), so all this tool needs is the screen and
-the keyboard, both of which are easy and reliable.
+Play normally; ~20 times a second it grabs a downscaled frame plus your held
+movement keys (GetAsyncKeyState) and your real mouse-x/y motion (Raw Input,
+which works despite CS2 clamping the cursor). The mouse gives clean turn-label
+ground truth -- far better than guessing turns from inter-frame image shift.
 
 Output: data/movement/<timestamp>/
     frames/000001.jpg ...        downscaled BGR frames
-    actions.jsonl                one line per frame: held keys (+ frame name)
+    actions.jsonl                per frame: {"f", "keys": [...], "m": [dx, dy]}
 
 Usage:
-    python tools/record_movement.py --test      # verify key capture, no saving
+    python tools/record_movement.py --test      # verify key + mouse capture
     python tools/record_movement.py --secs 600  # record ~10 min then stop
     python tools/record_movement.py             # record until END pressed
 """
@@ -31,6 +30,7 @@ sys.path.insert(0, PROJECT_ROOT)
 import cv2
 
 from src.capture.screen import ScreenCapture
+from src.input.raw_mouse import RawMouseListener
 
 # Virtual-key codes for the movement signals we clone. Order is fixed -- it
 # defines the label vector the model learns, so don't reorder without retraining.
@@ -97,6 +97,8 @@ def main():
 
     cap = ScreenCapture(monitor=monitor, target_fps=30)
     print("backend:", cap.start())
+    rawmouse = RawMouseListener()
+    rawmouse.start()
 
     session_dir = frames_dir = None
     actions_fh = None
@@ -118,6 +120,7 @@ def main():
     last_fps_print = t_start
     frames_since = 0
     seen = [0] * len(KEYS)  # keys touched since the last test print (catches taps)
+    mdx_accum = 0  # mouse-x accumulated since the last test print
     try:
         while True:
             tick = time.perf_counter()
@@ -133,22 +136,29 @@ def main():
                 time.sleep(0.005)
                 continue
             keys = _key_state(user32)
+            mdx, mdy = rawmouse.read_delta()
 
             if args.test:
                 frames_since += 1
                 seen = [s | k for s, k in zip(seen, keys)]
+                mdx_accum += mdx
                 if tick - last_fps_print >= 0.5:
                     fps = frames_since / (tick - last_fps_print)
                     touched = [name for (name, _), k in zip(KEYS, seen) if k]
-                    print(f"\r[record] {fps:4.1f} fps  touched={touched!s:34}", end="")
+                    print(
+                        f"\r[record] {fps:4.1f} fps  mouseX={mdx_accum:+5d}  "
+                        f"touched={touched!s:30}",
+                        end="",
+                    )
                     last_fps_print = tick
                     frames_since = 0
                     seen = [0] * len(KEYS)
+                    mdx_accum = 0
             else:
                 small = cv2.resize(frame, (FRAME_W, FRAME_H), interpolation=cv2.INTER_AREA)
                 name = f"{idx:06d}.jpg"
                 cv2.imwrite(os.path.join(frames_dir, name), small, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                actions_fh.write(json.dumps({"f": name, "keys": keys}) + "\n")
+                actions_fh.write(json.dumps({"f": name, "keys": keys, "m": [mdx, mdy]}) + "\n")
                 idx += 1
                 if idx % 150 == 0:
                     print(f"\r[record] {idx} frames ({(tick - t_start):.0f}s)   ", end="")
@@ -159,6 +169,7 @@ def main():
     except KeyboardInterrupt:
         print("\n[record] interrupted.")
     finally:
+        rawmouse.stop()
         cap.stop()
         if actions_fh:
             actions_fh.close()
