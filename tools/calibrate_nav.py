@@ -59,22 +59,29 @@ def _measure_heading(capture, reader, keybind_forward: str,
     return angle_between(start, end)
 
 
-def calibrate(write: bool, test_counts: int, monitor: int) -> None:
+def calibrate(write: bool, test_counts: int, monitor: int, countdown: int = 6) -> None:
     with open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")) as f:
         cfg = yaml.safe_load(f)
     mm = cfg["minimap"]
     reader = MinimapReader(mm["x"], mm["y"], mm["size"],
                            player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
-                           hsv_lower=tuple(mm.get("hsv_lower", (88, 120, 120))),
-                           hsv_upper=tuple(mm.get("hsv_upper", (104, 255, 255))))
+                           sat_min=mm.get("sat_min", 150),
+                           val_min=mm.get("val_min", 190))
     fwd = cfg["keybinds"]["forward"]
     monitor = monitor if monitor is not None else cfg["display"]["monitor"]
 
     capture = ScreenCapture(monitor=monitor, target_fps=30)
     print(f"[Calibrate] Capture backend: {capture.start()}")
-    print("[Calibrate] Make sure CS2 is focused and you have space ahead.")
-    print("[Calibrate] Starting in 3s...")
-    time.sleep(3.0)
+    print("[Calibrate] Stand in OPEN SPACE facing a long sightline. The tool "
+          "will walk + turn your character itself -- don't touch the controls.")
+    try:
+        input(">>> Press ENTER to arm, then switch to CS2... ")
+    except EOFError:
+        pass
+    for i in range(countdown, 0, -1):
+        print(f"\r>>> Starting in {i}...  (switch to CS2, stand still)   ", end="", flush=True)
+        time.sleep(1)
+    print("\r>>> GO -- calibrating, hands off!                          ")
 
     try:
         h_before = _measure_heading(capture, reader, fwd)
@@ -104,8 +111,9 @@ def calibrate(write: bool, test_counts: int, monitor: int) -> None:
                   "--counts value.")
             return
         invert, gain = result
-        # Clamp gain to a sane band; raw measurement can be noisy.
-        gain = max(0.3, min(6.0, gain))
+        # Clamp gain to a sane band; raw measurement can be noisy. Upper bound is
+        # generous because high in-game sensitivity needs many counts per degree.
+        gain = max(0.3, min(80.0, gain))
         print("\n[Calibrate] RESULT:")
         print(f"  nav_invert_turn: {str(invert).lower()}")
         print(f"  nav_turn_gain:   {gain:.2f}")
@@ -129,6 +137,8 @@ if __name__ == "__main__":
     parser.add_argument("--counts", type=int, default=400,
                        help="Total mouse counts for the test turn")
     parser.add_argument("--monitor", type=int, default=None, help="Monitor index override")
+    parser.add_argument("--countdown", type=int, default=6,
+                       help="Seconds to count down after ENTER before driving")
     args = parser.parse_args()
 
-    calibrate(args.write, args.counts, args.monitor)
+    calibrate(args.write, args.counts, args.monitor, args.countdown)

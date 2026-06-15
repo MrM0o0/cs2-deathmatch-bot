@@ -86,8 +86,8 @@ class Bot:
         mm = self.config["minimap"]
         self.minimap_reader = MinimapReader(
             mm["x"], mm["y"], mm["size"],
-            hsv_lower=tuple(mm.get("hsv_lower", (88, 120, 120))),
-            hsv_upper=tuple(mm.get("hsv_upper", (104, 255, 255))),
+            sat_min=mm.get("sat_min", 150),
+            val_min=mm.get("val_min", 190),
         )
 
         # Brain

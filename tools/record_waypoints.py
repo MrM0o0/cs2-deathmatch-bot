@@ -85,8 +85,8 @@ def load_minimap_reader() -> tuple[MinimapReader, dict]:
     reader = MinimapReader(
         mm["x"], mm["y"], mm["size"],
         player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
-        hsv_lower=tuple(mm.get("hsv_lower", (88, 120, 120))),
-        hsv_upper=tuple(mm.get("hsv_upper", (104, 255, 255))),
+        sat_min=mm.get("sat_min", 150),
+        val_min=mm.get("val_min", 190),
     )
     return reader, cfg
 

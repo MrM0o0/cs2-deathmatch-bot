@@ -28,10 +28,11 @@ minimap:
   x: 16
   y: 16
   size: 256
-  player_arrow_color: [0, 255, 255]  # Cyan player dot (CS2 local player)
-  # OpenCV-HSV band for the player dot. Measured on this setup: ~(96,214,245).
-  hsv_lower: [88, 120, 120]
-  hsv_upper: [104, 255, 255]
+  # Player dot is detected hue-agnostically as the brightest, most-saturated
+  # blob -- CS2 reassigns the blip colour each match (cyan, yellow, ...), so a
+  # fixed hue is unreliable. Map terrain is dull, the dot is bright+saturated.
+  sat_min: 150
+  val_min: 190
 
 detection:
   model_path: "models/cs2_yolov8n.onnx"
@@ -70,7 +71,7 @@ navigation:
   stuck_timeout: 2.0            # Seconds before stuck recovery
   waypoint_reach_dist: 50       # Pixels on minimap
   wall_avoid_threshold: 200     # Depth pixels for wall detection
-  # Waypoint-following controller (calibrate in-game):
-  nav_turn_gain: 1.6            # Mouse counts emitted per degree of heading error
-  nav_max_turn: 22              # Per-tick turn clamp (smoothness)
+  # Waypoint-following controller (calibrate_nav.py --write sets these):
+  nav_turn_gain: 40             # Mouse counts emitted per degree of heading error
+  nav_max_turn: 150             # Per-tick turn clamp = turn speed (~85 deg/s at 30Hz)
   nav_invert_turn: false        # Flip if the bot consistently turns AWAY from its path
