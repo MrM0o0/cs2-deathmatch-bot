@@ -40,13 +40,17 @@ def random_in_range(low: float, high: float) -> float:
     return random.uniform(low, high)
 
 
-def screen_delta_to_mouse(dx_pixels: float, dy_pixels: float,
-                          sensitivity: float, m_yaw: float,
-                          m_pitch: float,
-                          screen_width: int = 3440,
-                          screen_height: int = 1440,
-                          fov_horizontal: float = 90.0,
-                          scale: float = 1.0) -> tuple[int, int]:
+def screen_delta_to_mouse(
+    dx_pixels: float,
+    dy_pixels: float,
+    sensitivity: float,
+    m_yaw: float,
+    m_pitch: float,
+    screen_width: int = 3440,
+    screen_height: int = 1440,
+    fov_horizontal: float = 90.0,
+    scale: float = 1.0,
+) -> tuple[int, int]:
     """Convert screen pixel delta to mouse movement counts.
 
     Uses proper FOV-based angle calculation:
@@ -85,8 +89,9 @@ def screen_delta_to_mouse(dx_pixels: float, dy_pixels: float,
     return mouse_dx, mouse_dy
 
 
-def bbox_to_aim_point(x1: float, y1: float, x2: float, y2: float,
-                      head_aim: bool = False) -> tuple[float, float]:
+def bbox_to_aim_point(
+    x1: float, y1: float, x2: float, y2: float, head_aim: bool = False
+) -> tuple[float, float]:
     """Convert a detection bounding box to an aim point.
 
     Args:
@@ -108,12 +113,15 @@ def bbox_to_aim_point(x1: float, y1: float, x2: float, y2: float,
     return cx, cy
 
 
-def cubic_bezier(t: float, p0: tuple[float, float], p1: tuple[float, float],
-                 p2: tuple[float, float], p3: tuple[float, float]) -> tuple[float, float]:
+def cubic_bezier(
+    t: float,
+    p0: tuple[float, float],
+    p1: tuple[float, float],
+    p2: tuple[float, float],
+    p3: tuple[float, float],
+) -> tuple[float, float]:
     """Evaluate cubic Bezier curve at parameter t in [0, 1]."""
     u = 1 - t
-    x = (u**3 * p0[0] + 3 * u**2 * t * p1[0] +
-         3 * u * t**2 * p2[0] + t**3 * p3[0])
-    y = (u**3 * p0[1] + 3 * u**2 * t * p1[1] +
-         3 * u * t**2 * p2[1] + t**3 * p3[1])
+    x = u**3 * p0[0] + 3 * u**2 * t * p1[0] + 3 * u * t**2 * p2[0] + t**3 * p3[0]
+    y = u**3 * p0[1] + 3 * u**2 * t * p1[1] + 3 * u * t**2 * p2[1] + t**3 * p3[1]
     return x, y

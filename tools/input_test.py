@@ -26,9 +26,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from src.capture.screen import ScreenCapture
-from src.vision.minimap import MinimapReader
-from src.utils.math_helpers import distance
 from src.input import keyboard, mouse
+from src.utils.math_helpers import distance
+from src.vision.minimap import MinimapReader
 
 
 def _read_pos(cap, reader):
@@ -44,9 +44,9 @@ def _read_pos(cap, reader):
 def main():
     cfg = yaml.safe_load(open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")))
     mm = cfg["minimap"]
-    reader = MinimapReader(mm["x"], mm["y"], mm["size"],
-                           sat_min=mm.get("sat_min", 150),
-                           val_min=mm.get("val_min", 190))
+    reader = MinimapReader(
+        mm["x"], mm["y"], mm["size"], sat_min=mm.get("sat_min", 150), val_min=mm.get("val_min", 190)
+    )
     fwd = cfg["keybinds"]["forward"]
     cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=30)
     print("backend:", cap.start())
@@ -64,6 +64,7 @@ def main():
     # diagnosed: black frame = fullscreen-exclusive capture issue; chat/desktop
     # = CS2 not focused; real radar = capture is fine and input is the problem.
     import cv2
+
     _f = None
     for _ in range(10):
         _f = cap.grab()
@@ -72,9 +73,11 @@ def main():
         time.sleep(0.03)
     if _f is not None:
         os.makedirs(os.path.join(PROJECT_ROOT, "debug_output"), exist_ok=True)
-        cv2.imwrite(os.path.join(PROJECT_ROOT, "debug_output", "input_test_capture.png"),
-                    cv2.resize(_f, (_f.shape[1] // 4, _f.shape[0] // 4)))
-        mmc = _f[mm["y"]:mm["y"] + mm["size"], mm["x"]:mm["x"] + mm["size"]]
+        cv2.imwrite(
+            os.path.join(PROJECT_ROOT, "debug_output", "input_test_capture.png"),
+            cv2.resize(_f, (_f.shape[1] // 4, _f.shape[0] // 4)),
+        )
+        mmc = _f[mm["y"] : mm["y"] + mm["size"], mm["x"] : mm["x"] + mm["size"]]
         cv2.imwrite(os.path.join(PROJECT_ROOT, "debug_output", "input_test_minimap.png"), mmc)
 
     # --- Keyboard test: hold W for 2s, see if the blip travels --------------
@@ -85,8 +88,10 @@ def main():
     time.sleep(0.2)
     p1 = _read_pos(cap, reader)
     kb_moved = distance(p0, p1)
-    print(f"\n[keyboard] blip {p0} -> {p1}  moved {kb_moved:.0f}px  "
-          f"{'PASS' if kb_moved >= 8 else 'FAIL'}")
+    print(
+        f"\n[keyboard] blip {p0} -> {p1}  moved {kb_moved:.0f}px  "
+        f"{'PASS' if kb_moved >= 8 else 'FAIL'}"
+    )
 
     # --- Mouse test: turn the view, see if the blip rotates around itself ---
     # (Walk forward a touch first so there's a heading to rotate; then a big
@@ -102,8 +107,10 @@ def main():
     pb = _read_pos(cap, reader)
     mouse_moved = distance(pa, pb)
     # If keyboard failed, this mostly tests "did anything happen". Report raw.
-    print(f"[mouse]    after sweep+step blip {pa} -> {pb}  delta {mouse_moved:.0f}px  "
-          f"{'(view likely turned)' if mouse_moved >= 8 else '(no reaction)'}")
+    print(
+        f"[mouse]    after sweep+step blip {pa} -> {pb}  delta {mouse_moved:.0f}px  "
+        f"{'(view likely turned)' if mouse_moved >= 8 else '(no reaction)'}"
+    )
 
     keyboard.release_all()
     cap.stop()

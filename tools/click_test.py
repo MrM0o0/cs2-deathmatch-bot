@@ -6,7 +6,6 @@ Press Enter in the terminal to advance to the next method.
 
 import ctypes
 import time
-import sys
 
 user32 = ctypes.windll.user32
 
@@ -38,14 +37,12 @@ class INPUT(ctypes.Structure):
 
 
 def sendinput_click():
-    mi_down = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTDOWN, 0,
-                         ctypes.pointer(ctypes.c_ulong(0)))
+    mi_down = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTDOWN, 0, ctypes.pointer(ctypes.c_ulong(0)))
     inp_down = INPUT(type=INPUT_MOUSE)
     inp_down.union.mi = mi_down
     user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(INPUT))
     time.sleep(0.05)
-    mi_up = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTUP, 0,
-                       ctypes.pointer(ctypes.c_ulong(0)))
+    mi_up = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTUP, 0, ctypes.pointer(ctypes.c_ulong(0)))
     inp_up = INPUT(type=INPUT_MOUSE)
     inp_up.union.mi = mi_up
     user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(INPUT))
@@ -58,14 +55,16 @@ def mouse_event_click():
 
 
 def sendinput_move_and_click():
-    mi_down = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTDOWN, 0,
-                         ctypes.pointer(ctypes.c_ulong(0)))
+    mi_down = MOUSEINPUT(
+        0, 0, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTDOWN, 0, ctypes.pointer(ctypes.c_ulong(0))
+    )
     inp_down = INPUT(type=INPUT_MOUSE)
     inp_down.union.mi = mi_down
     user32.SendInput(1, ctypes.byref(inp_down), ctypes.sizeof(INPUT))
     time.sleep(0.05)
-    mi_up = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP, 0,
-                       ctypes.pointer(ctypes.c_ulong(0)))
+    mi_up = MOUSEINPUT(
+        0, 0, 0, MOUSEEVENTF_MOVE | MOUSEEVENTF_LEFTUP, 0, ctypes.pointer(ctypes.c_ulong(0))
+    )
     inp_up = INPUT(type=INPUT_MOUSE)
     inp_up.union.mi = mi_up
     user32.SendInput(1, ctypes.byref(inp_up), ctypes.sizeof(INPUT))

@@ -17,7 +17,7 @@ def _frame_with_dot(bgr, cx, cy, size=256, radius=6, origin=(16, 16)):
     ox, oy = origin
     frame = np.zeros((oy + size + 20, ox + size + 20, 3), dtype=np.uint8)
     # dull grey terrain so only the dot is bright+saturated
-    frame[oy:oy + size, ox:ox + size] = (60, 60, 62)
+    frame[oy : oy + size, ox : ox + size] = (60, 60, 62)
     cv2.circle(frame, (ox + cx, oy + cy), radius, bgr, -1)
     return frame
 

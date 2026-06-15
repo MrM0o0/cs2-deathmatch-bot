@@ -1,6 +1,7 @@
 """Screen capture using DXcam with mss fallback."""
 
 import time
+
 import numpy as np
 
 _dxcam_available = False
@@ -8,6 +9,7 @@ _mss_available = False
 
 try:
     import dxcam
+
     _dxcam_available = True
 except ImportError:
     pass
@@ -15,6 +17,7 @@ except ImportError:
 try:
     import mss
     import mss.tools
+
     _mss_available = True
 except ImportError:
     pass
@@ -23,8 +26,12 @@ except ImportError:
 class ScreenCapture:
     """High-performance screen capture for CS2."""
 
-    def __init__(self, monitor: int = 0, target_fps: int = 30,
-                 region: tuple[int, int, int, int] | None = None):
+    def __init__(
+        self,
+        monitor: int = 0,
+        target_fps: int = 30,
+        region: tuple[int, int, int, int] | None = None,
+    ):
         """
         Args:
             monitor: Monitor index.

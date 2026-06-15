@@ -29,14 +29,15 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from src.capture.screen import ScreenCapture
-from src.vision.minimap import MinimapReader
+from src.input import keyboard, mouse
 from src.movement.navigator import compute_turn_calibration
 from src.utils.math_helpers import angle_between, distance
-from src.input import keyboard, mouse
+from src.vision.minimap import MinimapReader
 
 
-def _measure_heading(capture, reader, keybind_forward: str,
-                     walk_time: float = 2.2, move_thresh: float = 4.0):
+def _measure_heading(
+    capture, reader, keybind_forward: str, walk_time: float = 2.2, move_thresh: float = 4.0
+):
     """Hold forward briefly and estimate heading from net blip displacement.
 
     The radar is zoomed to show the whole map, so the dot only travels a few
@@ -67,17 +68,23 @@ def calibrate(write: bool, test_counts: int, monitor: int, countdown: int = 6) -
     with open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")) as f:
         cfg = yaml.safe_load(f)
     mm = cfg["minimap"]
-    reader = MinimapReader(mm["x"], mm["y"], mm["size"],
-                           player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
-                           sat_min=mm.get("sat_min", 150),
-                           val_min=mm.get("val_min", 190))
+    reader = MinimapReader(
+        mm["x"],
+        mm["y"],
+        mm["size"],
+        player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
+        sat_min=mm.get("sat_min", 150),
+        val_min=mm.get("val_min", 190),
+    )
     fwd = cfg["keybinds"]["forward"]
     monitor = monitor if monitor is not None else cfg["display"]["monitor"]
 
     capture = ScreenCapture(monitor=monitor, target_fps=30)
     print(f"[Calibrate] Capture backend: {capture.start()}")
-    print("[Calibrate] Stand in OPEN SPACE facing a long sightline. The tool "
-          "will walk + turn your character itself -- don't touch the controls.")
+    print(
+        "[Calibrate] Stand in OPEN SPACE facing a long sightline. The tool "
+        "will walk + turn your character itself -- don't touch the controls."
+    )
     try:
         input(">>> Press ENTER to arm, then switch to CS2... ")
     except EOFError:
@@ -90,8 +97,10 @@ def calibrate(write: bool, test_counts: int, monitor: int, countdown: int = 6) -
     try:
         h_before = _measure_heading(capture, reader, fwd)
         if h_before is None:
-            print("[Calibrate] FAILED: blip didn't move while walking. "
-                  "Check cl_radar_rotate 0 and minimap region in settings.yaml.")
+            print(
+                "[Calibrate] FAILED: blip didn't move while walking. "
+                "Check cl_radar_rotate 0 and minimap region in settings.yaml."
+            )
             return
         print(f"[Calibrate] Heading before turn: {h_before:.1f} deg")
 
@@ -111,8 +120,7 @@ def calibrate(write: bool, test_counts: int, monitor: int, countdown: int = 6) -
 
         result = compute_turn_calibration(h_before, h_after, test_counts)
         if result is None:
-            print("[Calibrate] Turn too small to measure. Re-run with a larger "
-                  "--counts value.")
+            print("[Calibrate] Turn too small to measure. Re-run with a larger --counts value.")
             return
         invert, gain = result
         # Clamp gain to a sane band; raw measurement can be noisy. Upper bound is
@@ -138,11 +146,13 @@ def calibrate(write: bool, test_counts: int, monitor: int, countdown: int = 6) -
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Auto-calibrate nav turn sign + gain")
     parser.add_argument("--write", action="store_true", help="Save results to settings.yaml")
-    parser.add_argument("--counts", type=int, default=1500,
-                       help="Total mouse counts for the test turn")
+    parser.add_argument(
+        "--counts", type=int, default=1500, help="Total mouse counts for the test turn"
+    )
     parser.add_argument("--monitor", type=int, default=None, help="Monitor index override")
-    parser.add_argument("--countdown", type=int, default=6,
-                       help="Seconds to count down after ENTER before driving")
+    parser.add_argument(
+        "--countdown", type=int, default=6, help="Seconds to count down after ENTER before driving"
+    )
     args = parser.parse_args()
 
     calibrate(args.write, args.counts, args.monitor, args.countdown)

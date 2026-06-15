@@ -1,6 +1,7 @@
 """Load and manage personality profiles from YAML config."""
 
 import os
+
 import yaml
 
 
@@ -67,7 +68,7 @@ def load_personality(name: str, config_dir: str = "config/personalities") -> Per
     if not os.path.exists(path):
         raise FileNotFoundError(f"Personality profile not found: {path}")
 
-    with open(path, "r") as f:
+    with open(path) as f:
         data = yaml.safe_load(f)
 
     return Personality(data)
@@ -77,8 +78,4 @@ def list_personalities(config_dir: str = "config/personalities") -> list[str]:
     """List available personality profile names."""
     if not os.path.isdir(config_dir):
         return []
-    return [
-        os.path.splitext(f)[0]
-        for f in os.listdir(config_dir)
-        if f.endswith(".yaml")
-    ]
+    return [os.path.splitext(f)[0] for f in os.listdir(config_dir) if f.endswith(".yaml")]

@@ -2,18 +2,22 @@
 
 import random
 
+from src.utils.math_helpers import bbox_to_aim_point, distance, screen_delta_to_mouse
 from src.vision.detector import Detection
-from src.utils.math_helpers import (
-    bbox_to_aim_point, screen_delta_to_mouse, distance
-)
 
 
 class TargetingSystem:
     """Converts detections into aim commands with humanization."""
 
-    def __init__(self, screen_center_x: int, screen_center_y: int,
-                 sensitivity: float = 2.0, m_yaw: float = 0.022,
-                 m_pitch: float = 0.022, head_aim_chance: float = 0.3):
+    def __init__(
+        self,
+        screen_center_x: int,
+        screen_center_y: int,
+        sensitivity: float = 2.0,
+        m_yaw: float = 0.022,
+        m_pitch: float = 0.022,
+        head_aim_chance: float = 0.3,
+    ):
         self.cx = screen_center_x
         self.cy = screen_center_y
         self.sensitivity = sensitivity
@@ -31,8 +35,10 @@ class TargetingSystem:
         head_aim = random.random() < self.head_aim_chance or detection.is_head
 
         aim_x, aim_y = bbox_to_aim_point(
-            detection.x1, detection.y1,
-            detection.x2, detection.y2,
+            detection.x1,
+            detection.y1,
+            detection.x2,
+            detection.y2,
             head_aim=head_aim,
         )
 
@@ -45,14 +51,12 @@ class TargetingSystem:
 
         # Convert to mouse counts
         mouse_dx, mouse_dy = screen_delta_to_mouse(
-            dx_pixels, dy_pixels,
-            self.sensitivity, self.m_yaw, self.m_pitch
+            dx_pixels, dy_pixels, self.sensitivity, self.m_yaw, self.m_pitch
         )
 
         return mouse_dx, mouse_dy, screen_dist
 
-    def select_target(self, detections: list[Detection],
-                      our_team: str = "") -> Detection | None:
+    def select_target(self, detections: list[Detection], our_team: str = "") -> Detection | None:
         """Select the best target from a list of detections.
 
         Prioritizes:

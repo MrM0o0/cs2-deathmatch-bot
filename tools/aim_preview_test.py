@@ -14,23 +14,23 @@ Usage:
 Press Q to quit the preview window.
 """
 
-import sys
-import os
-import time
-import random
 import math
+import os
+import random
+import sys
+import time
 
 # Add project root to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import cv2
-import numpy as np
-from src.capture.screen import ScreenCapture
-from src.vision.detector import YOLODetector, Detection
-from src.vision.confirmation_filter import ConfirmationFilter
+
 from src.aim.targeting import TargetingSystem
+from src.capture.screen import ScreenCapture
 from src.humanizer.mistakes import MistakeMaker
-from src.utils.math_helpers import cubic_bezier, bbox_to_aim_point, distance
+from src.utils.math_helpers import bbox_to_aim_point, cubic_bezier, distance
+from src.vision.confirmation_filter import ConfirmationFilter
+from src.vision.detector import YOLODetector
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "cs2_yolov8n.onnx")
 
@@ -38,14 +38,14 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "cs2_yolov8
 CX, CY = 960, 540
 
 # Colors (BGR)
-COLOR_CONFIRMED = (0, 255, 0)       # Green - confirmed detection
-COLOR_RAW = (128, 128, 128)         # Gray - unconfirmed
-COLOR_CROSSHAIR = (255, 255, 255)   # White - crosshair
-COLOR_AIM_TARGET = (0, 255, 255)    # Yellow - where we'd aim
-COLOR_BEZIER = (255, 255, 0)        # Cyan - bezier path
-COLOR_OVERSHOOT = (0, 128, 255)     # Orange - overshoot point
-COLOR_HEAD = (0, 0, 255)            # Red - head aim point
-COLOR_INFO_BG = (0, 0, 0)          # Black background for text
+COLOR_CONFIRMED = (0, 255, 0)  # Green - confirmed detection
+COLOR_RAW = (128, 128, 128)  # Gray - unconfirmed
+COLOR_CROSSHAIR = (255, 255, 255)  # White - crosshair
+COLOR_AIM_TARGET = (0, 255, 255)  # Yellow - where we'd aim
+COLOR_BEZIER = (255, 255, 0)  # Cyan - bezier path
+COLOR_OVERSHOOT = (0, 128, 255)  # Orange - overshoot point
+COLOR_HEAD = (0, 0, 255)  # Red - head aim point
+COLOR_INFO_BG = (0, 0, 0)  # Black background for text
 
 
 def generate_bezier_preview(start_x, start_y, end_x, end_y, num_points=30):
@@ -76,9 +76,18 @@ def generate_bezier_preview(start_x, start_y, end_x, end_y, num_points=30):
     return points
 
 
-def draw_aim_preview(frame, raw_detections, confirmed_detections, target,
-                     aim_point, bezier_points, overshoot_point,
-                     inference_ms, cap_fps, aim_info):
+def draw_aim_preview(
+    frame,
+    raw_detections,
+    confirmed_detections,
+    target,
+    aim_point,
+    bezier_points,
+    overshoot_point,
+    inference_ms,
+    cap_fps,
+    aim_info,
+):
     """Draw the full aim preview visualization."""
     vis = frame.copy()
 
@@ -120,9 +129,15 @@ def draw_aim_preview(frame, raw_detections, confirmed_detections, target,
         if overshoot_point:
             ox, oy = int(overshoot_point[0]), int(overshoot_point[1])
             cv2.circle(vis, (ox, oy), 10, COLOR_OVERSHOOT, 2)
-            cv2.putText(vis, "OVERSHOOT", (ox + 12, oy - 5),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, COLOR_OVERSHOOT, 1)
-
+            cv2.putText(
+                vis,
+                "OVERSHOOT",
+                (ox + 12, oy - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.4,
+                COLOR_OVERSHOOT,
+                1,
+            )
 
     # Info panel (top-left)
     lines = [
@@ -184,8 +199,11 @@ def main():
 
     # Init targeting (for aim calculations only, no mouse movement)
     targeting = TargetingSystem(
-        screen_center_x=CX, screen_center_y=CY,
-        sensitivity=2.0, m_yaw=0.022, m_pitch=0.022,
+        screen_center_x=CX,
+        screen_center_y=CY,
+        sensitivity=2.0,
+        m_yaw=0.022,
+        m_pitch=0.022,
         head_aim_chance=0.3,
     )
 
@@ -250,7 +268,10 @@ def main():
                 # Calculate aim point
                 head_aim = random.random() < 0.3 or target.is_head
                 aim_x, aim_y = bbox_to_aim_point(
-                    target.x1, target.y1, target.x2, target.y2,
+                    target.x1,
+                    target.y1,
+                    target.x2,
+                    target.y2,
                     head_aim=head_aim,
                 )
                 aim_point = (aim_x, aim_y)
@@ -260,8 +281,9 @@ def main():
 
                 # Check if target changed significantly (regenerate bezier)
                 tcx, tcy = target.center
-                target_moved = (last_target_center is None or
-                               distance(last_target_center, (tcx, tcy)) > 30)
+                target_moved = (
+                    last_target_center is None or distance(last_target_center, (tcx, tcy)) > 30
+                )
 
                 if target_moved:
                     last_target_center = (tcx, tcy)
@@ -299,10 +321,16 @@ def main():
 
             # Draw everything
             vis = draw_aim_preview(
-                frame, raw_detections, confirmed_detections,
-                target, aim_point, bezier_points,
+                frame,
+                raw_detections,
+                confirmed_detections,
+                target,
+                aim_point,
+                bezier_points,
                 overshoot_point if will_overshoot else None,
-                detector.inference_ms, capture.fps, aim_info,
+                detector.inference_ms,
+                capture.fps,
+                aim_info,
             )
 
             # Scale down

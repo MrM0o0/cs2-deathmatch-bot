@@ -1,6 +1,7 @@
 """Detect when the bot is stuck and initiate recovery."""
 
 import time
+
 import numpy as np
 
 
@@ -56,8 +57,7 @@ class StuckDetector:
         self._last_frame = self._downsample(frame)
         return False
 
-    def _frame_similarity(self, frame_a: np.ndarray,
-                          frame_b: np.ndarray) -> float:
+    def _frame_similarity(self, frame_a: np.ndarray, frame_b: np.ndarray) -> float:
         """Compare two frames for similarity (0 = different, 1 = identical)."""
         a = self._downsample(frame_a)
         b = frame_b  # Already downsampled

@@ -1,9 +1,10 @@
 """Tests for A* pathfinding and the face-aware NavigationController."""
 
-import math
-
 from src.movement.navigator import (
-    Waypoint, WaypointGraph, NavigationController, compute_turn_calibration,
+    NavigationController,
+    Waypoint,
+    WaypointGraph,
+    compute_turn_calibration,
 )
 
 
@@ -34,6 +35,7 @@ def _grid_graph(n: int = 5) -> WaypointGraph:
 
 # --- A* ---------------------------------------------------------------------
 
+
 def test_astar_straight_line():
     g = _grid_graph(5)
     path = g.shortest_path(0, 4)  # top row, left to right
@@ -62,6 +64,7 @@ def test_astar_unknown_or_disconnected():
 
 
 # --- Heading estimation -----------------------------------------------------
+
 
 def test_heading_from_motion_east():
     g = _grid_graph(5)
@@ -93,6 +96,7 @@ def test_heading_not_set_when_still():
 
 # --- Turn command sign ------------------------------------------------------
 
+
 def test_turn_toward_target_on_the_right():
     g = _grid_graph(5)
     nav = NavigationController(g, move_threshold=2.0, turn_gain=1.0, max_turn=999)
@@ -103,16 +107,15 @@ def test_turn_toward_target_on_the_right():
     nav._route = [g.nearest(50, 0).id, g.nearest(50, 400).id]
     nav._route_idx = 1
     cmd = nav.update((50.0, 0.0))
-    assert cmd["yaw_error_deg"] > 0     # target is clockwise of heading
-    assert cmd["turn_x"] > 0            # turning right (positive mouse-x)
-    assert cmd["forward"] is True       # still advancing while rounding
+    assert cmd["yaw_error_deg"] > 0  # target is clockwise of heading
+    assert cmd["turn_x"] > 0  # turning right (positive mouse-x)
+    assert cmd["forward"] is True  # still advancing while rounding
 
 
 def test_turn_inverts_with_flag():
     g = _grid_graph(5)
     base = NavigationController(g, move_threshold=2.0, turn_gain=1.0, max_turn=999)
-    inv = NavigationController(g, move_threshold=2.0, turn_gain=1.0,
-                              max_turn=999, invert_turn=True)
+    inv = NavigationController(g, move_threshold=2.0, turn_gain=1.0, max_turn=999, invert_turn=True)
     for nav in (base, inv):
         for x in range(0, 60, 10):
             nav.update((float(x), 0.0))
@@ -146,6 +149,7 @@ def test_no_waypoints_is_idle():
 
 
 # --- Auto-calibration -------------------------------------------------------
+
 
 def test_calibration_same_sign_no_invert():
     # +400 counts produced +40deg rotation -> assumption holds, gain 10 c/deg.

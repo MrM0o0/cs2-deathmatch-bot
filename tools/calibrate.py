@@ -6,6 +6,7 @@ then saves them to settings.yaml.
 
 import os
 import sys
+
 import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -60,6 +61,7 @@ class RegionCalibrator:
         capture.start()
 
         import time
+
         time.sleep(0.5)
         frame = capture.grab()
         capture.stop()
@@ -79,8 +81,13 @@ class RegionCalibrator:
         print()
 
         region_names = [
-            "health", "armor", "ammo_clip", "ammo_reserve",
-            "killfeed", "alive_ct", "alive_t",
+            "health",
+            "armor",
+            "ammo_clip",
+            "ammo_reserve",
+            "killfeed",
+            "alive_ct",
+            "alive_t",
         ]
 
         window = "Calibration"
@@ -94,21 +101,32 @@ class RegionCalibrator:
             while True:
                 display = frame.copy()
                 if scale != 1.0:
-                    display = cv2.resize(display,
-                                        (int(w * scale), int(h * scale)))
+                    display = cv2.resize(display, (int(w * scale), int(h * scale)))
 
                 # Draw existing regions
                 for rname, (rx, ry, rw, rh) in self.regions.items():
                     srx, sry = int(rx * scale), int(ry * scale)
                     srw, srh = int(rw * scale), int(rh * scale)
-                    cv2.rectangle(display, (srx, sry),
-                                (srx + srw, sry + srh), (0, 255, 0), 2)
-                    cv2.putText(display, rname, (srx, sry - 5),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+                    cv2.rectangle(display, (srx, sry), (srx + srw, sry + srh), (0, 255, 0), 2)
+                    cv2.putText(
+                        display,
+                        rname,
+                        (srx, sry - 5),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (0, 255, 0),
+                        1,
+                    )
 
-                cv2.putText(display, f"Select: {name} (SPACE=next, ESC=skip)",
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
-                           (0, 255, 255), 2)
+                cv2.putText(
+                    display,
+                    f"Select: {name} (SPACE=next, ESC=skip)",
+                    (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 255),
+                    2,
+                )
 
                 cv2.imshow(window, display)
                 key = cv2.waitKey(30) & 0xFF
@@ -129,7 +147,7 @@ class RegionCalibrator:
         """Save calibrated regions to settings.yaml."""
         settings_path = os.path.join(PROJECT_ROOT, "config", "settings.yaml")
 
-        with open(settings_path, "r") as f:
+        with open(settings_path) as f:
             settings = yaml.safe_load(f)
 
         settings["regions"] = {k: v for k, v in self.regions.items()}

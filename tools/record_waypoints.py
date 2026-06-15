@@ -30,9 +30,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
 from src.capture.screen import ScreenCapture
-from src.vision.minimap import MinimapReader
 from src.movement.navigator import Waypoint, WaypointGraph
 from src.utils.math_helpers import distance
+from src.vision.minimap import MinimapReader
 
 
 def wait_then_countdown(seconds: int) -> None:
@@ -63,19 +63,27 @@ def _preview_verdict(trail: list[tuple[int, int]]) -> None:
     ys = [p[1] for p in trail]
     travelled = (max(xs) - min(xs)) + (max(ys) - min(ys))
     distinct = len(set(trail))
-    print(f"[Recorder] samples={len(trail)} distinct={distinct} "
-          f"x:{min(xs)}->{max(xs)} y:{min(ys)}->{max(ys)} travelled={travelled}px")
+    print(
+        f"[Recorder] samples={len(trail)} distinct={distinct} "
+        f"x:{min(xs)}->{max(xs)} y:{min(ys)}->{max(ys)} travelled={travelled}px"
+    )
     if travelled >= 25:
-        print("[Recorder] VERDICT: MOVES. Tracking works -- ready to record. "
-              "Re-run without --preview to build the map.")
+        print(
+            "[Recorder] VERDICT: MOVES. Tracking works -- ready to record. "
+            "Re-run without --preview to build the map."
+        )
     elif travelled >= 6:
-        print("[Recorder] VERDICT: BARELY MOVES. Detected but low resolution -- "
-              "zoom the radar in a notch (raise cl_radar_scale) or we lower the "
-              "node spacing.")
+        print(
+            "[Recorder] VERDICT: BARELY MOVES. Detected but low resolution -- "
+            "zoom the radar in a notch (raise cl_radar_scale) or we lower the "
+            "node spacing."
+        )
     else:
-        print("[Recorder] VERDICT: FROZEN. Dot detected but not tracking -- "
-              "likely still centered (cl_radar_always_centered must be 0) or you "
-              "didn't move during the window.")
+        print(
+            "[Recorder] VERDICT: FROZEN. Dot detected but not tracking -- "
+            "likely still centered (cl_radar_always_centered must be 0) or you "
+            "didn't move during the window."
+        )
 
 
 def load_minimap_reader() -> tuple[MinimapReader, dict]:
@@ -83,7 +91,9 @@ def load_minimap_reader() -> tuple[MinimapReader, dict]:
         cfg = yaml.safe_load(f)
     mm = cfg["minimap"]
     reader = MinimapReader(
-        mm["x"], mm["y"], mm["size"],
+        mm["x"],
+        mm["y"],
+        mm["size"],
         player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
         sat_min=mm.get("sat_min", 150),
         val_min=mm.get("val_min", 190),
@@ -91,9 +101,16 @@ def load_minimap_reader() -> tuple[MinimapReader, dict]:
     return reader, cfg
 
 
-def record(map_name: str, drop_dist: float, merge_dist: float,
-           preview: bool, monitor: int, countdown: int = 5,
-           preview_secs: int = 12, record_secs: int = 0) -> None:
+def record(
+    map_name: str,
+    drop_dist: float,
+    merge_dist: float,
+    preview: bool,
+    monitor: int,
+    countdown: int = 5,
+    preview_secs: int = 12,
+    record_secs: int = 0,
+) -> None:
     reader, cfg = load_minimap_reader()
     monitor = monitor if monitor is not None else cfg["display"]["monitor"]
 
@@ -114,13 +131,10 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
     print(f"[Recorder] Capture backend: {backend}")
     if preview:
         print("[Recorder] PREVIEW mode -- printing blip position, not saving nodes.")
-        print("[Recorder] Confirm the (x, y) tracks your movement, then re-run "
-              "without --preview.")
+        print("[Recorder] Confirm the (x, y) tracks your movement, then re-run without --preview.")
     else:
-        print(f"[Recorder] Recording '{map_name}'. Walk the routes. Ctrl+C to "
-              f"save -> {out_path}")
-        print(f"[Recorder] Dropping a node every {drop_dist}px, "
-              f"merging within {merge_dist}px.")
+        print(f"[Recorder] Recording '{map_name}'. Walk the routes. Ctrl+C to save -> {out_path}")
+        print(f"[Recorder] Dropping a node every {drop_dist}px, merging within {merge_dist}px.")
 
     def nearest_existing(x: float, y: float) -> Waypoint | None:
         best, best_d = None, merge_dist
@@ -142,17 +156,20 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
     # Preview auto-runs for a fixed window then reports a verdict, so you can
     # walk in fullscreen CS2 without needing to watch the terminal live.
     preview_trail: list[tuple[int, int]] = []
-    preview_deadline = (time.perf_counter() + preview_secs) if (preview and preview_secs > 0) else None
+    preview_deadline = None
+    if preview and preview_secs > 0:
+        preview_deadline = time.perf_counter() + preview_secs
     if preview and preview_secs > 0:
         print(f"[Recorder] Walk around for {preview_secs}s...")
 
     def save_graph() -> None:
         graph.save(out_path)
         edges = sum(len(w.neighbors) for w in graph.waypoints.values()) // 2
-        print(f"\n[Recorder] Saved {len(graph.waypoints)} nodes / "
-              f"{edges} edges -> {out_path}")
+        print(f"\n[Recorder] Saved {len(graph.waypoints)} nodes / {edges} edges -> {out_path}")
 
-    record_deadline = (time.perf_counter() + record_secs) if (not preview and record_secs > 0) else None
+    record_deadline = None
+    if not preview and record_secs > 0:
+        record_deadline = time.perf_counter() + record_secs
     if record_deadline is not None:
         print(f"[Recorder] Auto-saving after {record_secs}s -- walk the routes now.")
 
@@ -195,8 +212,7 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
                 if last_node is not None:
                     link(last_node, node)
                 last_node = node
-                print(f"\r[Recorder] nodes={len(graph.waypoints)} "
-                      f"last=({x},{y})   ", end="")
+                print(f"\r[Recorder] nodes={len(graph.waypoints)} last=({x},{y})   ", end="")
             time.sleep(0.03)
 
     except KeyboardInterrupt:
@@ -211,20 +227,48 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Record a CS2 waypoint graph by walking")
     parser.add_argument("--map", "-m", required=True, help="Map name (output filename)")
-    parser.add_argument("--drop-dist", type=float, default=22.0,
-                       help="Minimap px travelled between dropped nodes")
-    parser.add_argument("--merge-dist", type=float, default=16.0,
-                       help="Snap to an existing node within this many px")
-    parser.add_argument("--preview", action="store_true",
-                       help="Print blip position only; verify tracking before recording")
+    parser.add_argument(
+        "--drop-dist", type=float, default=22.0, help="Minimap px travelled between dropped nodes"
+    )
+    parser.add_argument(
+        "--merge-dist",
+        type=float,
+        default=16.0,
+        help="Snap to an existing node within this many px",
+    )
+    parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Print blip position only; verify tracking before recording",
+    )
     parser.add_argument("--monitor", type=int, default=None, help="Monitor index override")
-    parser.add_argument("--countdown", type=int, default=5,
-                       help="Seconds to count down after ENTER (0 to skip the wait)")
-    parser.add_argument("--duration", type=int, default=12,
-                       help="Preview: seconds to capture then auto-report (0 = until Ctrl+C)")
-    parser.add_argument("--record-secs", type=int, default=0,
-                       help="Recording: auto-save after this many seconds (0 = until Ctrl+C)")
+    parser.add_argument(
+        "--countdown",
+        type=int,
+        default=5,
+        help="Seconds to count down after ENTER (0 to skip the wait)",
+    )
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=12,
+        help="Preview: seconds to capture then auto-report (0 = until Ctrl+C)",
+    )
+    parser.add_argument(
+        "--record-secs",
+        type=int,
+        default=0,
+        help="Recording: auto-save after this many seconds (0 = until Ctrl+C)",
+    )
     args = parser.parse_args()
 
-    record(args.map, args.drop_dist, args.merge_dist, args.preview, args.monitor,
-           args.countdown, args.duration, args.record_secs)
+    record(
+        args.map,
+        args.drop_dist,
+        args.merge_dist,
+        args.preview,
+        args.monitor,
+        args.countdown,
+        args.duration,
+        args.record_secs,
+    )

@@ -2,18 +2,22 @@
 
 import heapq
 import json
+import math
 import os
 import random
-import math
 from collections import deque
 
 from src.utils.math_helpers import (
-    distance, angle_between, normalize_angle, clamp,
+    angle_between,
+    clamp,
+    distance,
+    normalize_angle,
 )
 
 
-def compute_turn_calibration(heading_before: float, heading_after: float,
-                             mouse_counts: int) -> tuple[bool, float] | None:
+def compute_turn_calibration(
+    heading_before: float, heading_after: float, mouse_counts: int
+) -> tuple[bool, float] | None:
     """Derive nav turn-sign and gain from a known turn experiment.
 
     The bot walks forward, we read its heading (from blip motion), issue a
@@ -48,9 +52,14 @@ class Waypoint:
 
     __slots__ = ("id", "x", "y", "neighbors", "tags")
 
-    def __init__(self, wp_id: int, x: float, y: float,
-                 neighbors: list[int] | None = None,
-                 tags: list[str] | None = None):
+    def __init__(
+        self,
+        wp_id: int,
+        x: float,
+        y: float,
+        neighbors: list[int] | None = None,
+        tags: list[str] | None = None,
+    ):
         self.id = wp_id
         self.x = x
         self.y = y
@@ -74,8 +83,7 @@ class WaypointGraph:
         """Find the nearest waypoint to a position."""
         if not self.waypoints:
             return None
-        return min(self.waypoints.values(),
-                   key=lambda wp: distance((x, y), wp.pos()))
+        return min(self.waypoints.values(), key=lambda wp: distance((x, y), wp.pos()))
 
     def random_neighbor(self, wp_id: int) -> Waypoint | None:
         """Get a random neighbor of a waypoint."""
@@ -145,13 +153,15 @@ class WaypointGraph:
         """Save waypoint graph to JSON."""
         data = []
         for wp in self.waypoints.values():
-            data.append({
-                "id": wp.id,
-                "x": wp.x,
-                "y": wp.y,
-                "neighbors": wp.neighbors,
-                "tags": wp.tags,
-            })
+            data.append(
+                {
+                    "id": wp.id,
+                    "x": wp.x,
+                    "y": wp.y,
+                    "neighbors": wp.neighbors,
+                    "tags": wp.tags,
+                }
+            )
         with open(path, "w") as f:
             json.dump(data, f, indent=2)
 
@@ -159,7 +169,7 @@ class WaypointGraph:
         """Load waypoint graph from JSON."""
         if not os.path.exists(path):
             return
-        with open(path, "r") as f:
+        with open(path) as f:
             data = json.load(f)
         for item in data:
             wp = Waypoint(
@@ -194,10 +204,17 @@ class NavigationController:
     -- and are pinned down during in-game calibration.
     """
 
-    def __init__(self, graph: WaypointGraph, reach_dist: float = 40.0,
-                 turn_gain: float = 1.6, max_turn: int = 22,
-                 move_threshold: float = 3.0, history: int = 30,
-                 invert_turn: bool = False, turn_deadzone: float = 18.0):
+    def __init__(
+        self,
+        graph: WaypointGraph,
+        reach_dist: float = 40.0,
+        turn_gain: float = 1.6,
+        max_turn: int = 22,
+        move_threshold: float = 3.0,
+        history: int = 30,
+        invert_turn: bool = False,
+        turn_deadzone: float = 18.0,
+    ):
         """
         Args:
             graph: Waypoint graph to navigate.
@@ -248,9 +265,16 @@ class NavigationController:
             ``left``/``right`` (bool), plus ``heading_deg``, ``yaw_error_deg``,
             and ``has_route`` for debugging/overlay.
         """
-        idle = {"turn_x": 0, "forward": False, "back": False,
-                "left": False, "right": False, "heading_deg": self._heading,
-                "yaw_error_deg": 0.0, "has_route": False}
+        idle = {
+            "turn_x": 0,
+            "forward": False,
+            "back": False,
+            "left": False,
+            "right": False,
+            "heading_deg": self._heading,
+            "yaw_error_deg": 0.0,
+            "has_route": False,
+        }
 
         if not self.has_waypoints():
             return idle
@@ -284,7 +308,10 @@ class NavigationController:
 
         cmd = {
             "turn_x": turn,
-            "forward": False, "back": False, "left": False, "right": False,
+            "forward": False,
+            "back": False,
+            "left": False,
+            "right": False,
             "heading_deg": self._heading,
             "yaw_error_deg": yaw_error,
             "has_route": True,
@@ -338,11 +365,13 @@ class NavigationController:
             self._route, self._route_idx = [], 0
             return
         # Prefer a goal that's a real distance away so the bot actually travels.
-        candidates = [wp for wp in self.graph.waypoints.values()
-                      if distance(start.pos(), wp.pos()) > self.reach_dist * 4]
+        candidates = [
+            wp
+            for wp in self.graph.waypoints.values()
+            if distance(start.pos(), wp.pos()) > self.reach_dist * 4
+        ]
         if not candidates:
-            candidates = [wp for wp in self.graph.waypoints.values()
-                          if wp.id != start.id]
+            candidates = [wp for wp in self.graph.waypoints.values() if wp.id != start.id]
         if not candidates:
             self._route, self._route_idx = [], 0
             return

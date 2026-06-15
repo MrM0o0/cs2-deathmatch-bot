@@ -2,7 +2,6 @@
 
 import random
 import time
-import math
 
 import numpy as np
 
@@ -42,12 +41,13 @@ class WallFollower:
         center_y = h // 2
         strip_h = h // 4
 
-        left_strip = frame[center_y - strip_h:center_y + strip_h,
-                          w // 6:w // 6 + strip_w]
-        center_strip = frame[center_y - strip_h:center_y + strip_h,
-                            w // 2 - strip_w // 2:w // 2 + strip_w // 2]
-        right_strip = frame[center_y - strip_h:center_y + strip_h,
-                           5 * w // 6 - strip_w:5 * w // 6]
+        left_strip = frame[center_y - strip_h : center_y + strip_h, w // 6 : w // 6 + strip_w]
+        center_strip = frame[
+            center_y - strip_h : center_y + strip_h, w // 2 - strip_w // 2 : w // 2 + strip_w // 2
+        ]
+        right_strip = frame[
+            center_y - strip_h : center_y + strip_h, 5 * w // 6 - strip_w : 5 * w // 6
+        ]
 
         # Detect walls by edge density (walls have more edges/detail up close)
         left_wall = self._wall_score(left_strip)
@@ -71,10 +71,15 @@ class WallFollower:
         if now - self._dir_change_time > self._dir_hold_time:
             self._dir_change_time = now
             self._dir_hold_time = random.uniform(1.0, 4.0)
-            self._current_dir = random.choice([
-                "forward", "forward", "forward",  # Bias toward forward
-                "forward_left", "forward_right",
-            ])
+            self._current_dir = random.choice(
+                [
+                    "forward",
+                    "forward",
+                    "forward",  # Bias toward forward
+                    "forward_left",
+                    "forward_right",
+                ]
+            )
 
         if self._current_dir == "forward_left":
             result["turn_x"] = -2

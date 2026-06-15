@@ -1,29 +1,31 @@
 """Debug visualization overlay for development and tuning."""
 
 import time
+
 import numpy as np
 
 try:
     import cv2
+
     _HAS_CV2 = True
 except ImportError:
     _HAS_CV2 = False
 
-from src.vision.detector import Detection
 from src.brain.state_machine import BotState
+from src.vision.detector import Detection
 
 
 class DebugOverlay:
     """Draws debug information on frames for visualization."""
 
     COLORS = {
-        "ct": (255, 150, 50),     # Blue-ish (BGR)
-        "t": (50, 50, 255),       # Red
+        "ct": (255, 150, 50),  # Blue-ish (BGR)
+        "t": (50, 50, 255),  # Red
         "head_ct": (255, 200, 100),
         "head_t": (100, 100, 255),
-        "crosshair": (0, 255, 0), # Green
+        "crosshair": (0, 255, 0),  # Green
         "text": (255, 255, 255),  # White
-        "state": (0, 255, 255),   # Yellow
+        "state": (0, 255, 255),  # Yellow
     }
 
     def __init__(self, window_name: str = "CS2 Bot Debug", scale: float = 0.5):
@@ -33,9 +35,15 @@ class DebugOverlay:
         self._fps_time = time.perf_counter()
         self._fps = 0.0
 
-    def draw(self, frame: np.ndarray, detections: list[Detection],
-             state: BotState, hud_info: str = "",
-             inference_ms: float = 0, extra_lines: list[str] | None = None) -> np.ndarray:
+    def draw(
+        self,
+        frame: np.ndarray,
+        detections: list[Detection],
+        state: BotState,
+        hud_info: str = "",
+        inference_ms: float = 0,
+        extra_lines: list[str] | None = None,
+    ) -> np.ndarray:
         """Draw debug info on a frame copy.
 
         Returns the annotated frame (does not modify original).
@@ -52,8 +60,7 @@ class DebugOverlay:
             cv2.rectangle(vis, (x1, y1), (x2, y2), color, 2)
 
             label = f"{det.class_name} {det.confidence:.2f}"
-            cv2.putText(vis, label, (x1, y1 - 8),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+            cv2.putText(vis, label, (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
 
             # Draw center dot
             cx, cy = int(det.center[0]), int(det.center[1])
@@ -62,8 +69,7 @@ class DebugOverlay:
         # Draw crosshair
         h, w = vis.shape[:2]
         cx, cy = w // 2, h // 2
-        cv2.drawMarker(vis, (cx, cy), self.COLORS["crosshair"],
-                      cv2.MARKER_CROSS, 20, 1)
+        cv2.drawMarker(vis, (cx, cy), self.COLORS["crosshair"], cv2.MARKER_CROSS, 20, 1)
 
         # FPS counter
         self._fps_counter += 1
@@ -87,9 +93,9 @@ class DebugOverlay:
             lines.extend(extra_lines)
 
         for line in lines:
-            cv2.putText(vis, line, (10, y_offset),
-                       cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                       self.COLORS["text"], 1)
+            cv2.putText(
+                vis, line, (10, y_offset), cv2.FONT_HERSHEY_SIMPLEX, 0.6, self.COLORS["text"], 1
+            )
             y_offset += 22
 
         return vis

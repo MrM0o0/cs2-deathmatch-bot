@@ -1,6 +1,7 @@
 """YOLO ONNX inference for enemy detection."""
 
 import time
+
 import numpy as np
 
 try:
@@ -19,8 +20,16 @@ class Detection:
 
     __slots__ = ("class_id", "class_name", "confidence", "x1", "y1", "x2", "y2")
 
-    def __init__(self, class_id: int, class_name: str, confidence: float,
-                 x1: float, y1: float, x2: float, y2: float):
+    def __init__(
+        self,
+        class_id: int,
+        class_name: str,
+        confidence: float,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+    ):
         self.class_id = class_id
         self.class_name = class_name
         self.confidence = confidence
@@ -51,17 +60,20 @@ class Detection:
 
     def __repr__(self) -> str:
         cx, cy = self.center
-        return (f"Detection({self.class_name} {self.confidence:.2f} "
-                f"@ ({cx:.0f}, {cy:.0f}))")
+        return f"Detection({self.class_name} {self.confidence:.2f} @ ({cx:.0f}, {cy:.0f}))"
 
 
 class YOLODetector:
     """ONNX-based YOLO object detector with DirectML support."""
 
-    def __init__(self, model_path: str, input_size: int = 640,
-                 confidence_threshold: float = 0.45,
-                 nms_threshold: float = 0.5,
-                 classes: list[str] | None = None):
+    def __init__(
+        self,
+        model_path: str,
+        input_size: int = 640,
+        confidence_threshold: float = 0.45,
+        nms_threshold: float = 0.5,
+        classes: list[str] | None = None,
+    ):
         self.model_path = model_path
         self.input_size = input_size
         self.conf_thresh = confidence_threshold
@@ -113,7 +125,7 @@ class YOLODetector:
         pad_x = (self.input_size - new_w) // 2
         pad_y = (self.input_size - new_h) // 2
         padded = np.full((self.input_size, self.input_size, 3), 114, dtype=np.uint8)
-        padded[pad_y:pad_y + new_h, pad_x:pad_x + new_w] = resized
+        padded[pad_y : pad_y + new_h, pad_x : pad_x + new_w] = resized
 
         # HWC BGR -> CHW RGB, normalize to [0, 1]
         blob = padded[:, :, ::-1].transpose(2, 0, 1).astype(np.float32) / 255.0
@@ -121,8 +133,9 @@ class YOLODetector:
 
         return blob, scale, pad_x, pad_y
 
-    def postprocess(self, output: np.ndarray, scale: float,
-                    pad_x: float, pad_y: float) -> list[Detection]:
+    def postprocess(
+        self, output: np.ndarray, scale: float, pad_x: float, pad_y: float
+    ) -> list[Detection]:
         """Parse YOLO output into detections.
 
         Handles YOLOv8 output format: (1, 4+num_classes, num_boxes)

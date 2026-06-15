@@ -4,10 +4,10 @@ Run this while playing CS2 to automatically capture frames at intervals.
 Press F5 to save a screenshot, or use auto mode to capture every N seconds.
 """
 
+import argparse
 import os
 import sys
 import time
-import argparse
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -16,13 +16,15 @@ from src.capture.screen import ScreenCapture
 
 try:
     import cv2
+
     _HAS_CV2 = True
 except ImportError:
     _HAS_CV2 = False
 
 
-def collect_screenshots(output_dir: str, interval: float = 2.0,
-                        max_count: int = 1000, monitor: int = 0):
+def collect_screenshots(
+    output_dir: str, interval: float = 2.0, max_count: int = 1000, monitor: int = 0
+):
     """Capture screenshots at regular intervals.
 
     Args:
@@ -57,6 +59,7 @@ def collect_screenshots(output_dir: str, interval: float = 2.0,
             else:
                 # Fallback using PIL
                 from PIL import Image
+
                 img = Image.fromarray(frame[:, :, ::-1])  # BGR -> RGB
                 img.save(filepath)
 
@@ -73,14 +76,14 @@ def collect_screenshots(output_dir: str, interval: float = 2.0,
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CS2 Screenshot Collector")
-    parser.add_argument("--output", "-o", default="models/training/dataset/images",
-                       help="Output directory")
-    parser.add_argument("--interval", "-i", type=float, default=2.0,
-                       help="Capture interval in seconds")
-    parser.add_argument("--max", "-m", type=int, default=1000,
-                       help="Maximum screenshots")
-    parser.add_argument("--monitor", type=int, default=0,
-                       help="Monitor index")
+    parser.add_argument(
+        "--output", "-o", default="models/training/dataset/images", help="Output directory"
+    )
+    parser.add_argument(
+        "--interval", "-i", type=float, default=2.0, help="Capture interval in seconds"
+    )
+    parser.add_argument("--max", "-m", type=int, default=1000, help="Maximum screenshots")
+    parser.add_argument("--monitor", type=int, default=0, help="Monitor index")
     args = parser.parse_args()
 
     collect_screenshots(args.output, args.interval, args.max, args.monitor)

@@ -5,7 +5,6 @@ Uses mouse_event for CLICKS (CS2 blocks SendInput clicks but accepts mouse_event
 """
 
 import ctypes
-import ctypes.wintypes as wt
 import time
 
 # ── Win32 constants ──────────────────────────────────────────────────────────
@@ -61,8 +60,12 @@ class INPUT(ctypes.Structure):
 def move_relative(dx: int, dy: int) -> None:
     """Move mouse by relative pixels via SendInput. CS2 reads this for aim."""
     mi = MOUSEINPUT(
-        dx=int(dx), dy=int(dy), mouseData=0, dwFlags=MOUSEEVENTF_MOVE,
-        time=0, dwExtraInfo=ctypes.pointer(ctypes.c_ulong(0)),
+        dx=int(dx),
+        dy=int(dy),
+        mouseData=0,
+        dwFlags=MOUSEEVENTF_MOVE,
+        time=0,
+        dwExtraInfo=ctypes.pointer(ctypes.c_ulong(0)),
     )
     inp = INPUT(type=INPUT_MOUSE)
     inp.union.mi = mi

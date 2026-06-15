@@ -1,8 +1,8 @@
 """Keyboard input via Win32 SendInput with DirectInput scancodes."""
 
 import ctypes
-import time
 import random
+import time
 
 # ── Win32 constants ──────────────────────────────────────────────────────────
 INPUT_KEYBOARD = 1
@@ -13,16 +13,54 @@ user32 = ctypes.windll.user32
 
 # DirectInput scancodes (what CS2 actually reads)
 SCANCODES = {
-    "a": 0x1E, "b": 0x30, "c": 0x2E, "d": 0x20, "e": 0x12, "f": 0x21,
-    "g": 0x22, "h": 0x23, "i": 0x17, "j": 0x24, "k": 0x25, "l": 0x26,
-    "m": 0x32, "n": 0x31, "o": 0x18, "p": 0x19, "q": 0x10, "r": 0x13,
-    "s": 0x1F, "t": 0x14, "u": 0x16, "v": 0x2F, "w": 0x11, "x": 0x2D,
-    "y": 0x15, "z": 0x2C,
-    "1": 0x02, "2": 0x03, "3": 0x04, "4": 0x05, "5": 0x06,
-    "6": 0x07, "7": 0x08, "8": 0x09, "9": 0x0A, "0": 0x0B,
-    "space": 0x39, "enter": 0x1C, "escape": 0x01, "tab": 0x0F,
-    "shift": 0x2A, "ctrl": 0x1D, "alt": 0x38,
-    "f1": 0x3B, "f2": 0x3C, "f3": 0x3D, "f4": 0x3E, "f5": 0x3F,
+    "a": 0x1E,
+    "b": 0x30,
+    "c": 0x2E,
+    "d": 0x20,
+    "e": 0x12,
+    "f": 0x21,
+    "g": 0x22,
+    "h": 0x23,
+    "i": 0x17,
+    "j": 0x24,
+    "k": 0x25,
+    "l": 0x26,
+    "m": 0x32,
+    "n": 0x31,
+    "o": 0x18,
+    "p": 0x19,
+    "q": 0x10,
+    "r": 0x13,
+    "s": 0x1F,
+    "t": 0x14,
+    "u": 0x16,
+    "v": 0x2F,
+    "w": 0x11,
+    "x": 0x2D,
+    "y": 0x15,
+    "z": 0x2C,
+    "1": 0x02,
+    "2": 0x03,
+    "3": 0x04,
+    "4": 0x05,
+    "5": 0x06,
+    "6": 0x07,
+    "7": 0x08,
+    "8": 0x09,
+    "9": 0x0A,
+    "0": 0x0B,
+    "space": 0x39,
+    "enter": 0x1C,
+    "escape": 0x01,
+    "tab": 0x0F,
+    "shift": 0x2A,
+    "ctrl": 0x1D,
+    "alt": 0x38,
+    "f1": 0x3B,
+    "f2": 0x3C,
+    "f3": 0x3D,
+    "f4": 0x3E,
+    "f5": 0x3F,
 }
 
 
@@ -82,8 +120,10 @@ def _send_key_input(scancode: int, key_up: bool = False) -> None:
     inp.union.ki = ki
     sent = user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
     if sent != 1 and not _warned["once"]:
-        print(f"[keyboard] WARNING: SendInput injected {sent}/1 events -- keys "
-              f"are not reaching the game (struct size or focus issue).")
+        print(
+            f"[keyboard] WARNING: SendInput injected {sent}/1 events -- keys "
+            f"are not reaching the game (struct size or focus issue)."
+        )
         _warned["once"] = True
 
 

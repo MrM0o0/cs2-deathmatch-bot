@@ -1,15 +1,18 @@
 """Deliberate error injection for human-like imperfection."""
 
-import random
 import math
+import random
 
 
 class MistakeMaker:
     """Injects human-like mistakes into aim and actions."""
 
-    def __init__(self, overshoot_chance: float = 0.35,
-                 overshoot_magnitude: float = 1.3,
-                 tracking_error: float = 8.0):
+    def __init__(
+        self,
+        overshoot_chance: float = 0.35,
+        overshoot_magnitude: float = 1.3,
+        tracking_error: float = 8.0,
+    ):
         self.overshoot_chance = overshoot_chance
         self.overshoot_magnitude = overshoot_magnitude
         self.tracking_error = tracking_error
@@ -28,8 +31,9 @@ class MistakeMaker:
         """Decide if this aim movement should overshoot."""
         return random.random() < self.overshoot_chance
 
-    def overshoot_target(self, current_x: float, current_y: float,
-                         target_x: float, target_y: float) -> tuple[float, float]:
+    def overshoot_target(
+        self, current_x: float, current_y: float, target_x: float, target_y: float
+    ) -> tuple[float, float]:
         """Calculate an overshoot point past the target.
 
         Returns a point that goes past the target, requiring a correction.

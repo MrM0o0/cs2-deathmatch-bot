@@ -14,11 +14,10 @@ def extract_region(frame: np.ndarray, region: list[int] | tuple[int, ...]) -> np
         Cropped BGR region.
     """
     x, y, w, h = region
-    return frame[y:y + h, x:x + w].copy()
+    return frame[y : y + h, x : x + w].copy()
 
 
-def extract_crosshair_area(frame: np.ndarray, cx: int, cy: int,
-                           size: int = 200) -> np.ndarray:
+def extract_crosshair_area(frame: np.ndarray, cx: int, cy: int, size: int = 200) -> np.ndarray:
     """Extract the area around the crosshair for close-range detection."""
     half = size // 2
     h, w = frame.shape[:2]
@@ -29,7 +28,6 @@ def extract_crosshair_area(frame: np.ndarray, cx: int, cy: int,
     return frame[y1:y2, x1:x2].copy()
 
 
-def extract_minimap(frame: np.ndarray, x: int, y: int,
-                    size: int) -> np.ndarray:
+def extract_minimap(frame: np.ndarray, x: int, y: int, size: int) -> np.ndarray:
     """Extract the minimap region."""
-    return frame[y:y + size, x:x + size].copy()
+    return frame[y : y + size, x : x + size].copy()

@@ -8,18 +8,20 @@ Usage:
     python tools/calibrate_aim.py
 """
 
-import sys
-import os
-import time
 import math
+import os
+import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.utils.timer_setup import enable_high_resolution_timer
+
 enable_high_resolution_timer()
 
 import cv2
 import numpy as np
+
 from src.capture.screen import ScreenCapture
 from src.input.mouse import move_relative
 
@@ -75,7 +77,6 @@ def main():
         return
 
     h, w = frame.shape[:2]
-    cx, cy = w // 2, h // 2
     print(f"Resolution: {w}x{h}")
 
     # Game settings
@@ -120,9 +121,11 @@ def main():
 
         ratio = abs(dx_pixels) / expected_pixels if expected_pixels > 0 else 0
 
-        print(f"  Sent {counts} counts → moved {dx_pixels:.1f}px "
-              f"(expected {expected_pixels:.1f}px) "
-              f"ratio={ratio:.3f} confidence={confidence:.3f}")
+        print(
+            f"  Sent {counts} counts → moved {dx_pixels:.1f}px "
+            f"(expected {expected_pixels:.1f}px) "
+            f"ratio={ratio:.3f} confidence={confidence:.3f}"
+        )
 
         results.append((counts, dx_pixels, expected_pixels, ratio, confidence))
 

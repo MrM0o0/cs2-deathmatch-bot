@@ -7,13 +7,14 @@ Usage:
 """
 
 import ctypes
-import time
-import sys
 import os
+import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.utils.timer_setup import enable_high_resolution_timer
+
 enable_high_resolution_timer()
 
 user32 = ctypes.windll.user32
@@ -46,16 +47,14 @@ class INPUT(ctypes.Structure):
 
 
 def sendinput_down():
-    mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTDOWN, 0,
-                    ctypes.pointer(ctypes.c_ulong(0)))
+    mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTDOWN, 0, ctypes.pointer(ctypes.c_ulong(0)))
     inp = INPUT(type=INPUT_MOUSE)
     inp.union.mi = mi
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))
 
 
 def sendinput_up():
-    mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTUP, 0,
-                    ctypes.pointer(ctypes.c_ulong(0)))
+    mi = MOUSEINPUT(0, 0, 0, MOUSEEVENTF_LEFTUP, 0, ctypes.pointer(ctypes.c_ulong(0)))
     inp = INPUT(type=INPUT_MOUSE)
     inp.union.mi = mi
     user32.SendInput(1, ctypes.byref(inp), ctypes.sizeof(INPUT))

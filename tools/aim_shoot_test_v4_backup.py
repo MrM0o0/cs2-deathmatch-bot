@@ -8,26 +8,26 @@ Usage:
 Press Q in debug window or Ctrl+C to stop.
 """
 
-import sys
 import os
-import time
 import random
-import math
+import sys
+import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.utils.timer_setup import enable_high_resolution_timer
+
 enable_high_resolution_timer()
 
 import cv2
-import numpy as np
-from src.capture.screen import ScreenCapture
-from src.vision.detector import YOLODetector, Detection
-from src.vision.confirmation_filter import ConfirmationFilter
+
 from src.aim.mouse_mover import MouseMover
+from src.capture.screen import ScreenCapture
 from src.humanizer.mistakes import MistakeMaker
 from src.input import mouse
 from src.utils.math_helpers import bbox_to_aim_point, distance, screen_delta_to_mouse
+from src.vision.confirmation_filter import ConfirmationFilter
+from src.vision.detector import YOLODetector
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "cs2_yolov8n.onnx")
 LOG_PATH = os.path.join(os.path.dirname(__file__), "diagnostic_log.txt")

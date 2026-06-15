@@ -1,6 +1,5 @@
 """Minimap reading for player position and orientation."""
 
-import math
 import numpy as np
 
 try:
@@ -12,11 +11,18 @@ except ImportError:
 class MinimapReader:
     """Reads player position from the CS2 minimap."""
 
-    def __init__(self, minimap_x: int, minimap_y: int, minimap_size: int,
-                 player_arrow_color: tuple[int, int, int] = (0, 255, 0),
-                 sat_min: int = 150, val_min: int = 190,
-                 min_blob_area: int = 6, lock_radius: float = 60.0,
-                 **_legacy):
+    def __init__(
+        self,
+        minimap_x: int,
+        minimap_y: int,
+        minimap_size: int,
+        player_arrow_color: tuple[int, int, int] = (0, 255, 0),
+        sat_min: int = 150,
+        val_min: int = 190,
+        min_blob_area: int = 6,
+        lock_radius: float = 60.0,
+        **_legacy,
+    ):
         """
         Args:
             sat_min, val_min: the player dot is detected hue-agnostically as the
@@ -50,8 +56,7 @@ class MinimapReader:
         Returns:
             ((x, y) on minimap, angle in degrees)
         """
-        minimap = frame[self.y:self.y + self.size,
-                        self.x:self.x + self.size]
+        minimap = frame[self.y : self.y + self.size, self.x : self.x + self.size]
 
         if minimap.size == 0 or cv2 is None:
             return self._last_position, self._last_angle
@@ -65,8 +70,7 @@ class MinimapReader:
             np.array([179, 255, 255], dtype=np.uint8),
         )
 
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         candidates = []
         for c in contours:
             area = cv2.contourArea(c)
@@ -87,8 +91,11 @@ class MinimapReader:
         chosen = None
         if self._locked:
             lx, ly = self._last_position
-            near = [t for t in candidates
-                    if ((t[1][0] - lx) ** 2 + (t[1][1] - ly) ** 2) ** 0.5 <= self.lock_radius]
+            near = [
+                t
+                for t in candidates
+                if ((t[1][0] - lx) ** 2 + (t[1][1] - ly) ** 2) ** 0.5 <= self.lock_radius
+            ]
             if near:
                 chosen = max(near, key=lambda t: t[0])
         if chosen is None:
@@ -106,8 +113,7 @@ class MinimapReader:
             return self._last_angle
 
         # Find contours of the arrow
-        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL,
-                                       cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         if not contours:
             return self._last_angle
 

@@ -1,8 +1,8 @@
 """View YOLO annotations overlaid on images for verification."""
 
+import argparse
 import os
 import sys
-import argparse
 
 try:
     import cv2
@@ -13,8 +13,8 @@ except ImportError:
 
 CLASSES = ["ct", "t", "head_ct", "head_t"]
 COLORS = [
-    (255, 150, 50),   # ct - blue
-    (50, 50, 255),    # t - red
+    (255, 150, 50),  # ct - blue
+    (50, 50, 255),  # t - red
     (255, 200, 100),  # head_ct - light blue
     (100, 100, 255),  # head_t - light red
 ]
@@ -27,8 +27,9 @@ def view_labels(image_dir: str, label_dir: str):
         image_dir: Directory of images.
         label_dir: Directory of YOLO format label files.
     """
-    images = sorted([f for f in os.listdir(image_dir)
-                     if f.lower().endswith((".png", ".jpg", ".jpeg"))])
+    images = sorted(
+        [f for f in os.listdir(image_dir) if f.lower().endswith((".png", ".jpg", ".jpeg"))]
+    )
 
     if not images:
         print(f"No images found in {image_dir}")
@@ -53,14 +54,19 @@ def view_labels(image_dir: str, label_dir: str):
         # Draw labels if they exist
         label_count = 0
         if os.path.exists(label_path):
-            with open(label_path, "r") as f:
+            with open(label_path) as f:
                 for line in f:
                     parts = line.strip().split()
                     if len(parts) < 5:
                         continue
 
                     cls_id = int(parts[0])
-                    cx, cy, bw, bh = float(parts[1]), float(parts[2]), float(parts[3]), float(parts[4])
+                    cx, cy, bw, bh = (
+                        float(parts[1]),
+                        float(parts[2]),
+                        float(parts[3]),
+                        float(parts[4]),
+                    )
 
                     # Convert YOLO format to pixel coords
                     x1 = int((cx - bw / 2) * w)
@@ -72,14 +78,14 @@ def view_labels(image_dir: str, label_dir: str):
                     cls_name = CLASSES[cls_id] if cls_id < len(CLASSES) else f"cls_{cls_id}"
 
                     cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-                    cv2.putText(img, cls_name, (x1, y1 - 5),
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                    cv2.putText(
+                        img, cls_name, (x1, y1 - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2
+                    )
                     label_count += 1
 
         # Info text
         info = f"[{idx + 1}/{len(images)}] {img_name} - {label_count} labels"
-        cv2.putText(img, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                   (0, 255, 0), 2)
+        cv2.putText(img, info, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
         cv2.imshow("Label Viewer", img)
         key = cv2.waitKey(0) & 0xFF

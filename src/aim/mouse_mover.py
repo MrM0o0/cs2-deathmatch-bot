@@ -1,12 +1,12 @@
 """Bezier curve mouse movement for human-like aim paths."""
 
-import time
-import random
 import math
+import random
+import time
 
-from src.utils.math_helpers import cubic_bezier, distance
 from src.humanizer.noise import NoiseGenerator
 from src.input.mouse import move_relative
+from src.utils.math_helpers import cubic_bezier
 
 
 def _smoothstep(t: float) -> float:
@@ -38,8 +38,9 @@ class MouseMover:
         self._residual_x = 0.0
         self._residual_y = 0.0
 
-    def move_to_delta(self, dx: float, dy: float, duration_ms: float | None = None,
-                      steps: int | None = None) -> None:
+    def move_to_delta(
+        self, dx: float, dy: float, duration_ms: float | None = None, steps: int | None = None
+    ) -> None:
         """Move mouse by (dx, dy) along a humanized Bezier curve.
 
         Args:
@@ -92,7 +93,7 @@ class MouseMover:
             bx, by = cubic_bezier(t, p0, p1, p2, p3)
 
             # Add Perlin noise jitter (decreasing toward end)
-            fade = 1.0 - (t_linear ** 2)
+            fade = 1.0 - (t_linear**2)
             jx, jy = self._noise.mouse_jitter(self.noise_amplitude * fade)
             bx += jx
             by += jy

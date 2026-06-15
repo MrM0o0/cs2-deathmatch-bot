@@ -7,6 +7,7 @@ in roughly the same screen location.
 """
 
 import math
+
 from src.vision.detector import Detection
 
 
@@ -14,8 +15,16 @@ class TrackedObject:
     """A detection being tracked across frames."""
 
     __slots__ = (
-        "class_name", "cx", "cy", "width", "height", "confidence",
-        "frames_seen", "frames_missing", "confirmed", "_last_detection",
+        "class_name",
+        "cx",
+        "cy",
+        "width",
+        "height",
+        "confidence",
+        "frames_seen",
+        "frames_missing",
+        "confirmed",
+        "_last_detection",
     )
 
     def __init__(self, detection: Detection):
@@ -131,10 +140,7 @@ class ConfirmationFilter:
                 self._trackers.append(TrackedObject(det))
 
         # Remove stale trackers
-        self._trackers = [
-            t for t in self._trackers
-            if t.frames_missing <= self.max_missing_frames
-        ]
+        self._trackers = [t for t in self._trackers if t.frames_missing <= self.max_missing_frames]
 
         # Update confirmed status
         for tracker in self._trackers:
@@ -143,8 +149,7 @@ class ConfirmationFilter:
 
         # Return confirmed detections
         confirmed = [
-            t.last_detection for t in self._trackers
-            if t.confirmed and t.frames_missing == 0
+            t.last_detection for t in self._trackers if t.confirmed and t.frames_missing == 0
         ]
 
         return confirmed

@@ -1,14 +1,20 @@
 """Tests for math helper functions."""
 
 import math
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.utils.math_helpers import (
-    distance, angle_between, normalize_angle, lerp, clamp,
-    bbox_to_aim_point, cubic_bezier, screen_delta_to_mouse,
+    angle_between,
+    bbox_to_aim_point,
+    clamp,
+    cubic_bezier,
+    distance,
+    lerp,
+    normalize_angle,
+    screen_delta_to_mouse,
 )
 
 
@@ -75,6 +81,7 @@ def test_screen_delta_to_mouse():
     dx, dy = screen_delta_to_mouse(100, 50, 2.0, 0.022, 0.022)
 
     import math
+
     focal = (3440 / 2.0) / math.tan(math.radians(45.0))
     expected_dx = int(math.degrees(math.atan2(100, focal)) / (2.0 * 0.022))
     expected_dy = int(math.degrees(math.atan2(50, focal)) / (2.0 * 0.022))

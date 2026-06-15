@@ -20,7 +20,10 @@ class HUDState:
 
     def __repr__(self) -> str:
         status = "ALIVE" if self.is_alive else "DEAD"
-        return f"HUD({status} HP:{self.health} Armor:{self.armor} Ammo:{self.ammo_clip}/{self.ammo_reserve})"
+        return (
+            f"HUD({status} HP:{self.health} Armor:{self.armor} "
+            f"Ammo:{self.ammo_clip}/{self.ammo_reserve})"
+        )
 
 
 class HUDReader:
@@ -64,7 +67,7 @@ class HUDReader:
 
         region = self.regions["health"]
         x, y, w, h = region
-        roi = frame[y:y + h, x:x + w]
+        roi = frame[y : y + h, x : x + w]
 
         if roi.size == 0:
             return self._prev_state.is_alive
@@ -74,8 +77,7 @@ class HUDReader:
         mean_brightness = np.mean(roi)
         return mean_brightness > 30
 
-    def _read_number(self, frame: np.ndarray, region_name: str,
-                     default: int = 0) -> int:
+    def _read_number(self, frame: np.ndarray, region_name: str, default: int = 0) -> int:
         """Read a number from a HUD region using brightness analysis.
 
         Simple approach: estimate value by analyzing white pixel density.
@@ -86,7 +88,7 @@ class HUDReader:
 
         region = self.regions[region_name]
         x, y, w, h = region
-        roi = frame[y:y + h, x:x + w]
+        roi = frame[y : y + h, x : x + w]
 
         if roi.size == 0:
             return default

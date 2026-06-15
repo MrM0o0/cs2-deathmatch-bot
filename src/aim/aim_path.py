@@ -8,6 +8,7 @@ movement instead of visible jumps.
 import math
 import random
 import time
+
 from src.utils.math_helpers import cubic_bezier
 
 
@@ -61,8 +62,9 @@ class AimPath:
         self._step_delay = 0.0
         self._total_steps = 0
 
-    def start(self, total_dx: float, total_dy: float,
-              duration_ms: float | None = None, noise: float = 1.0) -> None:
+    def start(
+        self, total_dx: float, total_dy: float, duration_ms: float | None = None, noise: float = 1.0
+    ) -> None:
         """Generate a new Bezier aim path with high step density.
 
         Args:
@@ -116,7 +118,7 @@ class AimPath:
             bx, by = cubic_bezier(t, p0, p1, p2, p3)
 
             # Subtle noise that fades
-            fade = 1.0 - t_linear ** 2
+            fade = 1.0 - t_linear**2
             bx += random.gauss(0, noise * fade)
             by += random.gauss(0, noise * fade)
 

@@ -1,11 +1,10 @@
 """High-level decision making for the bot."""
 
 import random
-import time
 
-from src.brain.state_machine import BotState, StateMachine
-from src.vision.detector import Detection
+from src.brain.state_machine import BotState
 from src.humanizer.personality import Personality
+from src.vision.detector import Detection
 
 
 class Action:
@@ -28,9 +27,14 @@ class DecisionMaker:
         self._spray_count = 0
         self._current_target: Detection | None = None
 
-    def decide(self, state: BotState, enemies: list[Detection],
-               health: int, ammo_clip: int,
-               time_in_state: float) -> Action:
+    def decide(
+        self,
+        state: BotState,
+        enemies: list[Detection],
+        health: int,
+        ammo_clip: int,
+        time_in_state: float,
+    ) -> Action:
         """Make a decision based on current state.
 
         Returns an Action to execute.
@@ -55,8 +59,7 @@ class DecisionMaker:
             return Action("click")
         return Action("wait")
 
-    def _decide_fighting(self, enemies: list[Detection],
-                         health: int, ammo_clip: int) -> Action:
+    def _decide_fighting(self, enemies: list[Detection], health: int, ammo_clip: int) -> Action:
         """Engage enemies in combat."""
         if not enemies:
             return Action("search")
@@ -80,10 +83,7 @@ class DecisionMaker:
             else:
                 move = random.choice(["strafe_left", "strafe_right"])
 
-        return Action("engage",
-                      target=target,
-                      fire_mode=fire_mode,
-                      combat_move=move)
+        return Action("engage", target=target, fire_mode=fire_mode, combat_move=move)
 
     def _choose_fire_mode(self) -> str:
         """Choose between tap, burst, or spray."""

@@ -25,8 +25,7 @@ except ImportError:
 class SessionLogger:
     """Lightweight append-only logger for a single bot run."""
 
-    def __init__(self, root: str, frame_interval: float = 2.0,
-                 enabled: bool = True):
+    def __init__(self, root: str, frame_interval: float = 2.0, enabled: bool = True):
         """
         Args:
             root: Project root; logs go under ``<root>/logs/<timestamp>/``.
@@ -48,8 +47,7 @@ class SessionLogger:
         self.session_dir = os.path.join(root, "logs", stamp)
         self.frames_dir = os.path.join(self.session_dir, "frames")
         os.makedirs(self.frames_dir, exist_ok=True)
-        self._fh = open(os.path.join(self.session_dir, "session.jsonl"),
-                        "w", encoding="utf-8")
+        self._fh = open(os.path.join(self.session_dir, "session.jsonl"), "w", encoding="utf-8")
         print(f"[SessionLogger] Logging to {self.session_dir}")
 
     def log_tick(self, **fields) -> None:
@@ -73,8 +71,9 @@ class SessionLogger:
         img = frame
         if label:
             img = frame.copy()
-            cv2.putText(img, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX,
-                        0.7, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.putText(
+                img, label, (12, 28), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA
+            )
         path = os.path.join(self.frames_dir, f"f_{self._frame_count:05d}.jpg")
         cv2.imwrite(path, img, [cv2.IMWRITE_JPEG_QUALITY, 70])
         self._frame_count += 1
@@ -83,8 +82,10 @@ class SessionLogger:
         if self._fh is not None:
             self._fh.close()
             self._fh = None
-            print(f"[SessionLogger] Closed. {self._tick_count} ticks, "
-                  f"{self._frame_count} frames in {self.session_dir}")
+            print(
+                f"[SessionLogger] Closed. {self._tick_count} ticks, "
+                f"{self._frame_count} frames in {self.session_dir}"
+            )
 
 
 def _jsonable(obj):

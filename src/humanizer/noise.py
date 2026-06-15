@@ -1,10 +1,11 @@
 """Perlin/simplex noise for natural-looking jitter and variation."""
 
-import time
 import math
+import time
 
 try:
     from opensimplex import OpenSimplex
+
     _HAS_OPENSIMPLEX = True
 except ImportError:
     _HAS_OPENSIMPLEX = False
@@ -39,8 +40,9 @@ class NoiseGenerator:
         """
         if self._noise is not None:
             return self._noise.noise2(x * scale, y * scale)
-        return (math.sin(x * scale * 5.13 + y * scale * 3.77 + self._seed) *
-                math.cos(x * scale * 2.91 - y * scale * 4.23))
+        return math.sin(x * scale * 5.13 + y * scale * 3.77 + self._seed) * math.cos(
+            x * scale * 2.91 - y * scale * 4.23
+        )
 
     def time_noise(self, scale: float = 1.0, amplitude: float = 1.0) -> float:
         """Get noise value based on current time. Useful for continuous jitter."""

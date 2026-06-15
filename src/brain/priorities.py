@@ -1,7 +1,7 @@
 """Target selection and threat assessment."""
 
-from src.vision.detector import Detection
 from src.utils.math_helpers import distance
+from src.vision.detector import Detection
 
 
 class ThreatAssessor:
@@ -32,8 +32,9 @@ class ThreatAssessor:
 
         return proximity_score + size_score + conf_score
 
-    def prioritize_targets(self, detections: list[Detection],
-                           our_team: str = "") -> list[Detection]:
+    def prioritize_targets(
+        self, detections: list[Detection], our_team: str = ""
+    ) -> list[Detection]:
         """Sort detections by threat level.
 
         Returns enemies sorted by threat (highest first).
@@ -48,9 +49,9 @@ class ThreatAssessor:
         enemies.sort(key=lambda d: self.assess_threat(d), reverse=True)
         return enemies
 
-    def should_switch_target(self, current: Detection | None,
-                             new_targets: list[Detection],
-                             switch_threshold: float = 200) -> bool:
+    def should_switch_target(
+        self, current: Detection | None, new_targets: list[Detection], switch_threshold: float = 200
+    ) -> bool:
         """Decide if we should switch to a new target.
 
         Avoids constant target switching (looks robotic).

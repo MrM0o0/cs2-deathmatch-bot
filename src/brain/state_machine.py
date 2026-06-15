@@ -5,12 +5,12 @@ from enum import Enum, auto
 
 
 class BotState(Enum):
-    DEAD = auto()        # Waiting to respawn
-    ROAMING = auto()     # Moving around the map, no enemies visible
-    SEARCHING = auto()   # Recently lost sight of enemy, checking corners
-    FIGHTING = auto()    # Enemy detected, engaging in combat
+    DEAD = auto()  # Waiting to respawn
+    ROAMING = auto()  # Moving around the map, no enemies visible
+    SEARCHING = auto()  # Recently lost sight of enemy, checking corners
+    FIGHTING = auto()  # Enemy detected, engaging in combat
     RETREATING = auto()  # Low health, trying to disengage
-    STUCK = auto()       # Detected stuck, performing recovery
+    STUCK = auto()  # Detected stuck, performing recovery
 
 
 class StateMachine:
@@ -44,9 +44,14 @@ class StateMachine:
         """Get state transition data."""
         return self._state_data.get(key, default)
 
-    def update(self, is_alive: bool, enemies_visible: int,
-               health: int, is_stuck: bool,
-               disengage_health: int = 30) -> BotState:
+    def update(
+        self,
+        is_alive: bool,
+        enemies_visible: int,
+        health: int,
+        is_stuck: bool,
+        disengage_health: int = 30,
+    ) -> BotState:
         """Update state based on current game conditions.
 
         Returns the new state after evaluation.
@@ -76,8 +81,7 @@ class StateMachine:
 
         # Transition from fighting -> searching when enemies disappear
         if self.state == BotState.FIGHTING:
-            self.transition(BotState.SEARCHING,
-                            search_start=time.perf_counter())
+            self.transition(BotState.SEARCHING, search_start=time.perf_counter())
             return self.state
 
         # Search timeout -> roaming

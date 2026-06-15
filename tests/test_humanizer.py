@@ -1,15 +1,15 @@
 """Tests for humanizer components."""
 
-import sys
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.humanizer.timing import ReactionTimer, ActionCooldown
 from src.humanizer.mistakes import MistakeMaker
-from src.humanizer.personality import Personality, load_personality
 from src.humanizer.noise import NoiseGenerator
+from src.humanizer.personality import load_personality
+from src.humanizer.timing import ActionCooldown, ReactionTimer
 
 
 def test_reaction_timer_range():
@@ -56,8 +56,7 @@ def test_mistake_maker_overshoot():
 
 def test_personality_load():
     config_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-        "config", "personalities"
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "personalities"
     )
     p = load_personality("average", config_dir)
     assert p.name == "average"

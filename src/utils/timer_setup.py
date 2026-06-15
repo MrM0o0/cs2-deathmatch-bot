@@ -4,8 +4,8 @@ Windows sleep() has ~15ms granularity by default. This sets it to 1ms,
 which is critical for smooth mouse movement.
 """
 
-import ctypes
 import atexit
+import ctypes
 
 _timer_set = False
 

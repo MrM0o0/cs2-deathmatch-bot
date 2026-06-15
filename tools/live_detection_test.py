@@ -9,8 +9,8 @@ Usage:
 Press Q to quit the preview window.
 """
 
-import sys
 import os
+import sys
 import time
 
 # Add project root to path
@@ -18,24 +18,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import cv2
 import numpy as np
+
 from src.capture.screen import ScreenCapture
-from src.vision.detector import YOLODetector
 from src.vision.confirmation_filter import ConfirmationFilter
+from src.vision.detector import YOLODetector
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "cs2_yolov8n.onnx")
 
 # Colors (BGR)
 COLORS_CONFIRMED = {
-    "ct_player": (0, 255, 0),   # Green
-    "head": (0, 0, 255),         # Red
+    "ct_player": (0, 255, 0),  # Green
+    "head": (0, 0, 255),  # Red
 }
-COLOR_RAW = (128, 128, 128)      # Gray for unconfirmed
+COLOR_RAW = (128, 128, 128)  # Gray for unconfirmed
 DEFAULT_COLOR = (255, 255, 0)
 
 
-def draw_detections(frame: np.ndarray, raw_detections, confirmed_detections,
-                    inference_ms: float, cap_fps: float,
-                    filter_info: str) -> np.ndarray:
+def draw_detections(
+    frame: np.ndarray,
+    raw_detections,
+    confirmed_detections,
+    inference_ms: float,
+    cap_fps: float,
+    filter_info: str,
+) -> np.ndarray:
     """Draw bounding boxes and labels on a frame."""
     vis = frame.copy()
 
@@ -125,8 +131,12 @@ def main():
 
             # Draw results
             vis = draw_detections(
-                frame, raw_detections, confirmed_detections,
-                detector.inference_ms, capture.fps, filter_info,
+                frame,
+                raw_detections,
+                confirmed_detections,
+                detector.inference_ms,
+                capture.fps,
+                filter_info,
             )
 
             # Scale down for preview (full res can be huge)

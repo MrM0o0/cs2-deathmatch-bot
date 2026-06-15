@@ -2,11 +2,12 @@
 
 import ctypes
 import os
+import random
 import sys
 import threading
 import time
+
 import yaml
-import random
 
 # Hotkeys read globally via GetAsyncKeyState, so they work while CS2 has focus.
 # END  -> kill the bot instantly and release all input.
@@ -21,28 +22,27 @@ PAUSE_KEY_NAME = "HOME"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
-from src.capture.screen import ScreenCapture
-from src.capture.region import extract_region
-from src.vision.detector import YOLODetector, Detection
-from src.vision.confirmation_filter import ConfirmationFilter
-from src.vision.hud_reader import HUDReader, HUDState
-from src.vision.minimap import MinimapReader
-from src.brain.state_machine import StateMachine, BotState
-from src.brain.decision import DecisionMaker, Action
-from src.brain.priorities import ThreatAssessor
-from src.aim.targeting import TargetingSystem
 from src.aim.mouse_mover import MouseMover
 from src.aim.recoil import RecoilCompensator
-from src.movement.explorer import WallFollower
-from src.movement.navigator import WaypointGraph, NavigationController
-from src.movement.stuck_detector import StuckDetector
-from src.humanizer.personality import Personality, load_personality
-from src.humanizer.timing import ReactionTimer, ActionCooldown
+from src.aim.targeting import TargetingSystem
+from src.brain.decision import Action, DecisionMaker
+from src.brain.priorities import ThreatAssessor
+from src.brain.state_machine import StateMachine
+from src.capture.screen import ScreenCapture
 from src.humanizer.mistakes import MistakeMaker
 from src.humanizer.noise import NoiseGenerator
+from src.humanizer.personality import load_personality
+from src.humanizer.timing import ReactionTimer
 from src.input import keyboard, mouse
+from src.movement.explorer import WallFollower
+from src.movement.navigator import NavigationController, WaypointGraph
+from src.movement.stuck_detector import StuckDetector
 from src.utils.debug_overlay import DebugOverlay
 from src.utils.session_logger import SessionLogger
+from src.vision.confirmation_filter import ConfirmationFilter
+from src.vision.detector import Detection, YOLODetector
+from src.vision.hud_reader import HUDReader
+from src.vision.minimap import MinimapReader
 
 
 def _round(value, ndigits: int = 1):
@@ -53,7 +53,7 @@ def _round(value, ndigits: int = 1):
 def load_config(path: str = "config/settings.yaml") -> dict:
     """Load main configuration."""
     config_path = os.path.join(PROJECT_ROOT, path)
-    with open(config_path, "r") as f:
+    with open(config_path) as f:
         return yaml.safe_load(f)
 
 
@@ -66,8 +66,9 @@ class Bot:
 
         # Personality
         pname = personality_name or self.config["bot"]["default_personality"]
-        self.personality = load_personality(pname,
-            os.path.join(PROJECT_ROOT, "config", "personalities"))
+        self.personality = load_personality(
+            pname, os.path.join(PROJECT_ROOT, "config", "personalities")
+        )
         print(f"[Bot] Loaded personality: {self.personality}")
 
         # Screen capture
@@ -96,7 +97,9 @@ class Bot:
         self.hud_reader = HUDReader(self.config["regions"])
         mm = self.config["minimap"]
         self.minimap_reader = MinimapReader(
-            mm["x"], mm["y"], mm["size"],
+            mm["x"],
+            mm["y"],
+            mm["size"],
             sat_min=mm.get("sat_min", 150),
             val_min=mm.get("val_min", 190),
         )
@@ -105,14 +108,15 @@ class Bot:
         self.state_machine = StateMachine()
         self.decision_maker = DecisionMaker(self.personality)
         game = self.config["game"]
-        self.threat_assessor = ThreatAssessor(
-            (game["crosshair_x"], game["crosshair_y"])
-        )
+        self.threat_assessor = ThreatAssessor((game["crosshair_x"], game["crosshair_y"]))
 
         # Aim
         self.targeting = TargetingSystem(
-            game["crosshair_x"], game["crosshair_y"],
-            game["sensitivity"], game["m_yaw"], game["m_pitch"],
+            game["crosshair_x"],
+            game["crosshair_y"],
+            game["sensitivity"],
+            game["m_yaw"],
+            game["m_pitch"],
             self.personality.head_aim_chance,
         )
         self.mouse_mover = MouseMover(
@@ -143,11 +147,15 @@ class Bot:
         # Humanizer
         p = self.personality
         self.reaction_timer = ReactionTimer(
-            p.reaction_mean_ms, p.reaction_std_ms,
-            p.reaction_min_ms, p.reaction_max_ms,
+            p.reaction_mean_ms,
+            p.reaction_std_ms,
+            p.reaction_min_ms,
+            p.reaction_max_ms,
         )
         self.mistake_maker = MistakeMaker(
-            p.overshoot_chance, p.overshoot_magnitude, p.tracking_error,
+            p.overshoot_chance,
+            p.overshoot_magnitude,
+            p.tracking_error,
         )
         self.noise = NoiseGenerator()
 
@@ -198,8 +206,10 @@ class Bot:
         # of the (sometimes slow) main loop, and force-exits. Can't be starved.
         threading.Thread(target=self._panic_watchdog, daemon=True).start()
         print("[Bot] Ready.")
-        print(f"[Bot] *** {PANIC_KEY_NAME} = STOP instantly | {PAUSE_KEY_NAME} = "
-              f"pause/resume (take control) -- both work while CS2 is focused. ***")
+        print(
+            f"[Bot] *** {PANIC_KEY_NAME} = STOP instantly | {PAUSE_KEY_NAME} = "
+            f"pause/resume (take control) -- both work while CS2 is focused. ***"
+        )
         if self._max_run_seconds:
             print(f"[Bot] Auto-stops after {self._max_run_seconds}s as a failsafe.")
         print(f"[Bot] Tick rate: {self.config['bot']['tick_rate']} Hz")
@@ -213,8 +223,7 @@ class Bot:
 
     def _release_input(self) -> None:
         """Let go of mouse and keyboard (used by pause and panic)."""
-        for cleanup in (self._stop_firing, self._release_all_movement,
-                        keyboard.release_all):
+        for cleanup in (self._stop_firing, self._release_all_movement, keyboard.release_all):
             try:
                 cleanup()
             except Exception:
@@ -245,8 +254,10 @@ class Bot:
                 self.paused = not self.paused
                 if self.paused:
                     self._release_input()
-                    print(f"\n[Bot] PAUSED -- input released. {PAUSE_KEY_NAME} "
-                          f"to resume, {PANIC_KEY_NAME} to quit.")
+                    print(
+                        f"\n[Bot] PAUSED -- input released. {PAUSE_KEY_NAME} "
+                        f"to resume, {PANIC_KEY_NAME} to quit."
+                    )
                 else:
                     print("\n[Bot] RESUMED.")
             prev_pause_down = pause_down
@@ -260,7 +271,8 @@ class Bot:
             print(f"\n[Bot] PANIC key ({PANIC_KEY_NAME}) pressed -- stopping.")
             return True
         if self._max_run_seconds and (
-                time.perf_counter() - self._loop_start > self._max_run_seconds):
+            time.perf_counter() - self._loop_start > self._max_run_seconds
+        ):
             print(f"\n[Bot] Run time limit ({self._max_run_seconds}s) reached -- stopping.")
             return True
         return False
@@ -344,13 +356,14 @@ class Bot:
                 self.logger.maybe_save_frame(
                     frame,
                     label=f"{self.state_machine.state.name} | {action.type} | "
-                          f"en={len(enemies)} hp={hud.health}",
+                    f"en={len(enemies)} hp={hud.health}",
                 )
 
             # 9. Debug overlay
             if self.debug:
                 vis = self.debug.draw(
-                    frame, detections,
+                    frame,
+                    detections,
                     self.state_machine.state,
                     hud_info=str(hud),
                     inference_ms=self.detector.inference_ms,
@@ -452,9 +465,7 @@ class Bot:
 
         # Decide overshoot
         if self.mistake_maker.should_overshoot():
-            aim_x, aim_y = self.mistake_maker.overshoot_target(
-                0, 0, aim_x, aim_y
-            )
+            aim_x, aim_y = self.mistake_maker.overshoot_target(0, 0, aim_x, aim_y)
             # Main flick (overshoots)
             self.mouse_mover.move_to_delta(aim_x, aim_y)
             # Correction back to target
@@ -588,10 +599,14 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="CS2 Deathmatch Bot")
-    parser.add_argument("--personality", "-p", type=str, default=None,
-                       help="Personality profile (noob, average, tryhard)")
-    parser.add_argument("--no-debug", action="store_true",
-                       help="Disable debug overlay")
+    parser.add_argument(
+        "--personality",
+        "-p",
+        type=str,
+        default=None,
+        help="Personality profile (noob, average, tryhard)",
+    )
+    parser.add_argument("--no-debug", action="store_true", help="Disable debug overlay")
     args = parser.parse_args()
 
     bot = Bot(personality_name=args.personality)

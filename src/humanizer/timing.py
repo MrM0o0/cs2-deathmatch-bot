@@ -7,8 +7,9 @@ import time
 class ReactionTimer:
     """Generates human-like reaction times using normal distribution."""
 
-    def __init__(self, mean_ms: float = 250, std_ms: float = 50,
-                 min_ms: float = 150, max_ms: float = 500):
+    def __init__(
+        self, mean_ms: float = 250, std_ms: float = 50, min_ms: float = 150, max_ms: float = 500
+    ):
         self.mean_ms = mean_ms
         self.std_ms = std_ms
         self.min_ms = min_ms
