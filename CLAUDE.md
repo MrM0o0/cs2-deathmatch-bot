@@ -24,6 +24,15 @@ run in CS2 by the user, who then reports back or sends logs.
 
 ## Things that will bite you (learned in-game)
 
+- **Detection must run on the GPU (DirectML), not CPU.** On this machine (AMD
+  RX 6900 XT) GPU inference is ~9ms (~67 FPS pipeline) vs ~22ms on CPU (~34 FPS)
+  -- detection is the shared spine, so CPU drags down every rung. The detector
+  prefers `DmlExecutionProvider` automatically and prints a loud WARNING if it
+  falls back to CPU. The usual cause of a CPU fallback is the plain
+  `onnxruntime` package being installed alongside `onnxruntime-directml`: they
+  share the import name and the CPU one wins. Fix: `pip uninstall onnxruntime`
+  then `pip install --force-reinstall --no-deps onnxruntime-directml`.
+
 - **Keyboard input via `SendInput`:** the `INPUT` struct union must be sized to
   its largest member (`MOUSEINPUT`), or `sizeof` is 32 not 40 on 64-bit and
   `SendInput` silently rejects every keypress (returns 0). `test_input.py`

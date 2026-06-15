@@ -2,7 +2,10 @@
 dxcam>=0.3.0
 mss>=9.0.0
 
-# Object detection
+# Object detection.
+# IMPORTANT: do NOT also install the plain `onnxruntime` package -- it shares the
+# import name and shadows this one, silently dropping the AMD/DirectML GPU path
+# (3x slower CPU inference). If detection runs on CPU, that conflict is why.
 onnxruntime-directml>=1.17.0
 numpy>=1.24.0
 opencv-python>=4.8.0

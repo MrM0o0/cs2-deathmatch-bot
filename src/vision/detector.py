@@ -107,7 +107,16 @@ class YOLODetector:
         )
         self.input_name = self.session.get_inputs()[0].name
         active = self.session.get_providers()
-        print(f"[Detector] Loaded {self.model_path} on {active[0]}")
+        if active[0] == "CPUExecutionProvider":
+            print(
+                f"[Detector] WARNING: running on CPU ({active[0]}) -- expect ~3x slower "
+                "inference (~22ms vs ~9ms). The DirectML GPU provider isn't available. "
+                "Likely cause: the plain `onnxruntime` package is installed alongside "
+                "`onnxruntime-directml` and shadows it. Fix: pip uninstall onnxruntime, "
+                "then pip install --force-reinstall --no-deps onnxruntime-directml."
+            )
+        else:
+            print(f"[Detector] Loaded {self.model_path} on {active[0]} (GPU)")
 
     def preprocess(self, frame: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         """Preprocess BGR frame for YOLO input.
