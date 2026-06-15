@@ -9,11 +9,14 @@ appear on top. No input routing, no focus fight.
 REQUIREMENT: run CS2 in "Fullscreen Windowed" (borderless). A transparent
 overlay cannot draw over true exclusive-fullscreen.
 
-    python tools/threat_overlay.py
+    python tools/threat_overlay.py            # 5 second countdown, then overlay
+    python tools/threat_overlay.py --delay 8  # longer countdown
 
-Press END to quit. View-only: never touches mouse/keyboard.
+After launching, ALT-TAB into CS2 during the countdown so the overlay lands on
+top of the game. Press END to quit. View-only: never touches mouse/keyboard.
 """
 
+import argparse
 import ctypes
 import os
 import sys
@@ -81,6 +84,15 @@ class Detector(threading.Thread):
 
 
 def main():
+    ap = argparse.ArgumentParser(description="Rung 1 overlay: on-game threat highlights")
+    ap.add_argument(
+        "--delay",
+        type=float,
+        default=5.0,
+        help="Countdown (seconds) before the overlay appears -- tab into CS2 during it",
+    )
+    args = ap.parse_args()
+
     # Match overlay pixels to capture pixels regardless of Windows scaling.
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -88,8 +100,14 @@ def main():
         ctypes.windll.user32.SetProcessDPIAware()
 
     cfg = yaml.safe_load(open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")))
+    # Start capture + model load now so it warms up while you tab into the game.
     worker = Detector(cfg)
     worker.start()
+
+    # Countdown: switch to CS2 (Fullscreen-Windowed) before the overlay shows.
+    for remaining in range(int(args.delay), 0, -1):
+        print(f"[overlay] alt-tab into CS2... starting in {remaining}s")
+        time.sleep(1)
 
     root = tk.Tk()
     root.overrideredirect(True)
