@@ -66,11 +66,12 @@ class TargetTracker(threading.Thread):
     loop never sees a half-updated target.
     """
 
-    def __init__(self, cfg, fps, head):
+    def __init__(self, cfg, fps, head, confirm):
         super().__init__(daemon=True)
         self.cfg = cfg
         self.fps = fps
         self.head = head
+        self.confirm = confirm
         self.running = True
         self.ready = threading.Event()
         self.cx = self.cy = 0
@@ -93,7 +94,9 @@ class TargetTracker(threading.Thread):
             classes=det_cfg["classes"],
         )
         det.load()
-        conf = ConfirmationFilter()
+        # Acquire after `confirm` frames (lower = faster lock, default 2 vs the
+        # 3 used for autonomous fire); survive a couple missed frames to hold it.
+        conf = ConfirmationFilter(min_confirm_frames=self.confirm, max_missing_frames=3)
 
         prev_aim = None
         prev_t = 0.0
@@ -177,6 +180,9 @@ def main():
     ap.add_argument("--max-step", type=int, default=18, help="Max mouse counts per control tick")
     ap.add_argument("--fps", type=int, default=144, help="Detection capture rate")
     ap.add_argument(
+        "--confirm", type=int, default=2, help="Frames before acquiring a target (lower = faster)"
+    )
+    ap.add_argument(
         "--control-hz", type=float, default=333.0, help="Mouse control loop rate (smoothness)"
     )
     ap.add_argument("--head", action="store_true", help="Aim head instead of chest")
@@ -189,7 +195,7 @@ def main():
     activate_vk = KEYS[args.key]
     user32 = ctypes.windll.user32
 
-    tracker = TargetTracker(cfg, args.fps, args.head)
+    tracker = TargetTracker(cfg, args.fps, args.head, args.confirm)
     tracker.start()
     print("[assist] loading detector + capture...")
     if not tracker.ready.wait(timeout=30):
