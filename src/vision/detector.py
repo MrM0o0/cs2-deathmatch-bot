@@ -178,9 +178,15 @@ class YOLODetector:
         x2 = (x2 - pad_x) / scale
         y2 = (y2 - pad_y) / scale
 
-        # NMS
+        # Per-class NMS: a head and a body that overlap must not suppress each
+        # other (only same-class boxes compete). Class-agnostic NMS could drop a
+        # real second player in a crowd, or a head sitting on a body.
         boxes = np.stack([x1, y1, x2, y2], axis=1)
-        indices = self._nms(boxes, max_scores)
+        indices = []
+        for c in np.unique(class_ids):
+            cls_idx = np.where(class_ids == c)[0]
+            keep = self._nms(boxes[cls_idx], max_scores[cls_idx])
+            indices.extend(int(cls_idx[k]) for k in keep)
 
         detections = []
         for i in indices:
