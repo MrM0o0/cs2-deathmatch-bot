@@ -1,10 +1,17 @@
 """Main loop orchestrator for the CS2 Deathmatch Bot."""
 
+import ctypes
 import os
 import sys
 import time
 import yaml
 import random
+
+# Panic key: press this any time to instantly stop the bot and release all
+# input, even while CS2 has focus (read globally via GetAsyncKeyState).
+# VK_END = 0x23. Polled every tick.
+PANIC_VK = 0x23
+PANIC_KEY_NAME = "END"
 
 # Add project root to path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -180,7 +187,13 @@ class Bot:
             print(f"[Bot] Loaded waypoints for {map_name}")
 
         self.running = True
-        print("[Bot] Ready. Press Ctrl+C to stop.")
+        self._loop_start = time.perf_counter()
+        self._max_run_seconds = self.config["bot"].get("max_run_seconds", 120)
+        print("[Bot] Ready.")
+        print(f"[Bot] *** PANIC: press {PANIC_KEY_NAME} (or Ctrl+C in terminal) "
+              f"to STOP instantly -- works even with CS2 focused. ***")
+        if self._max_run_seconds:
+            print(f"[Bot] Auto-stops after {self._max_run_seconds}s as a failsafe.")
         print(f"[Bot] Tick rate: {self.config['bot']['tick_rate']} Hz")
 
         try:
@@ -190,6 +203,18 @@ class Bot:
         finally:
             self.stop()
 
+    def _should_abort(self) -> bool:
+        """True if the panic key is down or the run time limit was hit."""
+        # High bit set => key currently pressed (read globally, focus-independent)
+        if ctypes.windll.user32.GetAsyncKeyState(PANIC_VK) & 0x8000:
+            print(f"\n[Bot] PANIC key ({PANIC_KEY_NAME}) pressed -- stopping.")
+            return True
+        if self._max_run_seconds and (
+                time.perf_counter() - self._loop_start > self._max_run_seconds):
+            print(f"\n[Bot] Run time limit ({self._max_run_seconds}s) reached -- stopping.")
+            return True
+        return False
+
     def _main_loop(self) -> None:
         """Main 30 Hz game loop."""
         tick_interval = 1.0 / self.config["bot"]["tick_rate"]
@@ -197,6 +222,11 @@ class Bot:
         while self.running:
             tick_start = time.perf_counter()
             self._tick_count += 1
+
+            # 0. Panic / time-limit check BEFORE doing anything else this tick.
+            if self._should_abort():
+                self.running = False
+                break
 
             # 1. Capture frame
             frame = self.capture.grab()

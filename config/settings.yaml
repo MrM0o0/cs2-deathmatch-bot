@@ -66,6 +66,7 @@ bot:
   default_personality: "average"
   debug_overlay: true
   debug_log: true
+  max_run_seconds: 120           # Failsafe: auto-stop after N seconds (0 = no limit)
 
 navigation:
   stuck_timeout: 2.0            # Seconds before stuck recovery
