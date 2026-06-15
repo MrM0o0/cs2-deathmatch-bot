@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    # Windows: the input layer uses ctypes.windll, so the suite is Windows-only.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install tooling + test deps
+        # Only what the tests import -- not the heavy runtime deps (dxcam,
+        # onnxruntime-directml) which aren't needed to run the suite.
+        run: pip install ruff pytest numpy opencv-python pyyaml
+
+      - name: Ruff lint
+        run: python -m ruff check src tests
+
+      - name: Ruff format check
+        run: python -m ruff format --check src tests
+
+      - name: Tests
+        run: python -m pytest -q

@@ -1,0 +1,29 @@
+#!/bin/sh
+# Pre-commit gate: lint + format-check the staged Python files, then run tests.
+# Enable once per clone with:  git config core.hooksPath .githooks
+# Bypass a false positive (rare) with:  git commit --no-verify
+
+set -e
+
+staged_py=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)
+
+if [ -n "$staged_py" ]; then
+    echo "[pre-commit] ruff check (staged)..."
+    if ! python -m ruff check $staged_py; then
+        echo "[pre-commit] Lint failed. Fix with: python -m ruff check --fix $staged_py"
+        exit 1
+    fi
+    echo "[pre-commit] ruff format check (staged)..."
+    if ! python -m ruff format --check $staged_py; then
+        echo "[pre-commit] Formatting needed. Run: python -m ruff format $staged_py"
+        exit 1
+    fi
+fi
+
+echo "[pre-commit] pytest..."
+if ! python -m pytest -q; then
+    echo "[pre-commit] Tests failed -- commit blocked."
+    exit 1
+fi
+
+echo "[pre-commit] OK"
