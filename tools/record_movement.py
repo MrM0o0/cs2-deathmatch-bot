@@ -50,6 +50,9 @@ KEYS = [
     ("mouse5", 0x06),  # XBUTTON2 -- common crouch bind
 ]
 END_VK = 0x23  # END = stop recording
+FIRE_VK = 0x01  # left mouse button -- recorded (not a model output) to flag and
+#                 drop combat frames in prep, so the movement model stays pure
+#                 navigation and never learns to spray/counter-strafe at nothing.
 
 # Small enough to train cheaply, big enough to read the geometry ahead.
 FRAME_W, FRAME_H = 160, 90
@@ -137,6 +140,7 @@ def main():
                 continue
             keys = _key_state(user32)
             mdx, mdy = rawmouse.read_delta()
+            fire = 1 if (user32.GetAsyncKeyState(FIRE_VK) & 0x8001) else 0
 
             if args.test:
                 frames_since += 1
@@ -158,7 +162,9 @@ def main():
                 small = cv2.resize(frame, (FRAME_W, FRAME_H), interpolation=cv2.INTER_AREA)
                 name = f"{idx:06d}.jpg"
                 cv2.imwrite(os.path.join(frames_dir, name), small, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                actions_fh.write(json.dumps({"f": name, "keys": keys, "m": [mdx, mdy]}) + "\n")
+                actions_fh.write(
+                    json.dumps({"f": name, "keys": keys, "m": [mdx, mdy], "fire": fire}) + "\n"
+                )
                 idx += 1
                 if idx % 150 == 0:
                     print(f"\r[record] {idx} frames ({(tick - t_start):.0f}s)   ", end="")
