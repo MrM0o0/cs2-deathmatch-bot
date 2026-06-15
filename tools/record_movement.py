@@ -53,12 +53,17 @@ END_VK = 0x23  # END = stop recording
 
 # Small enough to train cheaply, big enough to read the geometry ahead.
 FRAME_W, FRAME_H = 160, 90
-SAMPLE_HZ = 15
+SAMPLE_HZ = 20
+
+# GetAsyncKeyState bits: 0x8000 = down right now; 0x0001 = pressed since the
+# previous call. OR-ing them means a quick tap that happened *between* samples
+# (e.g. a counter-strafe) still registers, instead of being missed.
+_KEY_ACTIVE_MASK = 0x8001
 
 
 def _key_state(user32) -> list[int]:
-    """Read which movement keys are currently held (1/0), in KEYS order."""
-    return [1 if (user32.GetAsyncKeyState(vk) & 0x8000) else 0 for _, vk in KEYS]
+    """Which movement keys were active this interval (held OR tapped), in KEYS order."""
+    return [1 if (user32.GetAsyncKeyState(vk) & _KEY_ACTIVE_MASK) else 0 for _, vk in KEYS]
 
 
 def _countdown(user32, seconds: int) -> None:
