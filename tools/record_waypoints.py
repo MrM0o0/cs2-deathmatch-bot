@@ -35,19 +35,65 @@ from src.movement.navigator import Waypoint, WaypointGraph
 from src.utils.math_helpers import distance
 
 
+def wait_then_countdown(seconds: int) -> None:
+    """Block for ENTER, then count down so you can tab into CS2 before capture.
+
+    Press ENTER here while the terminal is focused, then alt-tab into the game
+    during the countdown -- capture only starts when it hits GO.
+    """
+    if seconds <= 0:
+        return
+    try:
+        input("\n>>> Tab back here, press ENTER to arm, then switch to CS2... ")
+    except EOFError:
+        pass  # non-interactive (e.g. piped) -- just count down
+    for i in range(seconds, 0, -1):
+        print(f"\r>>> Starting in {i}...  (switch to CS2 now)   ", end="", flush=True)
+        time.sleep(1)
+    print("\r>>> GO -- walk around!                              ")
+
+
+def _preview_verdict(trail: list[tuple[int, int]]) -> None:
+    """Summarise a preview walk and print a clear moves/frozen verdict."""
+    print()  # break the live \r line
+    if len(trail) < 2:
+        print("[Recorder] VERDICT: no samples -- minimap not detected at all.")
+        return
+    xs = [p[0] for p in trail]
+    ys = [p[1] for p in trail]
+    travelled = (max(xs) - min(xs)) + (max(ys) - min(ys))
+    distinct = len(set(trail))
+    print(f"[Recorder] samples={len(trail)} distinct={distinct} "
+          f"x:{min(xs)}->{max(xs)} y:{min(ys)}->{max(ys)} travelled={travelled}px")
+    if travelled >= 25:
+        print("[Recorder] VERDICT: MOVES. Tracking works -- ready to record. "
+              "Re-run without --preview to build the map.")
+    elif travelled >= 6:
+        print("[Recorder] VERDICT: BARELY MOVES. Detected but low resolution -- "
+              "zoom the radar in a notch (raise cl_radar_scale) or we lower the "
+              "node spacing.")
+    else:
+        print("[Recorder] VERDICT: FROZEN. Dot detected but not tracking -- "
+              "likely still centered (cl_radar_always_centered must be 0) or you "
+              "didn't move during the window.")
+
+
 def load_minimap_reader() -> tuple[MinimapReader, dict]:
     with open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")) as f:
         cfg = yaml.safe_load(f)
     mm = cfg["minimap"]
     reader = MinimapReader(
         mm["x"], mm["y"], mm["size"],
-        player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 0))),
+        player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
+        hsv_lower=tuple(mm.get("hsv_lower", (88, 120, 120))),
+        hsv_upper=tuple(mm.get("hsv_upper", (104, 255, 255))),
     )
     return reader, cfg
 
 
 def record(map_name: str, drop_dist: float, merge_dist: float,
-           preview: bool, monitor: int) -> None:
+           preview: bool, monitor: int, countdown: int = 5,
+           preview_secs: int = 12) -> None:
     reader, cfg = load_minimap_reader()
     monitor = monitor if monitor is not None else cfg["display"]["monitor"]
 
@@ -91,6 +137,15 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
             if a.id not in b.neighbors:
                 b.neighbors.append(a.id)
 
+    wait_then_countdown(countdown)
+
+    # Preview auto-runs for a fixed window then reports a verdict, so you can
+    # walk in fullscreen CS2 without needing to watch the terminal live.
+    preview_trail: list[tuple[int, int]] = []
+    preview_deadline = (time.perf_counter() + preview_secs) if (preview and preview_secs > 0) else None
+    if preview and preview_secs > 0:
+        print(f"[Recorder] Walk around for {preview_secs}s...")
+
     try:
         while True:
             frame = capture.grab()
@@ -101,6 +156,10 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
 
             if preview:
                 print(f"\r[Recorder] blip=({x:4d},{y:4d}) angle={angle:6.1f}", end="")
+                preview_trail.append((x, y))
+                if preview_deadline is not None and time.perf_counter() >= preview_deadline:
+                    _preview_verdict(preview_trail)
+                    break
                 time.sleep(0.1)
                 continue
 
@@ -133,7 +192,7 @@ def record(map_name: str, drop_dist: float, merge_dist: float,
             print(f"\n[Recorder] Saved {len(graph.waypoints)} nodes / "
                   f"{edges} edges -> {out_path}")
         else:
-            print("\n[Recorder] Preview ended.")
+            _preview_verdict(preview_trail)
     finally:
         capture.stop()
 
@@ -148,6 +207,11 @@ if __name__ == "__main__":
     parser.add_argument("--preview", action="store_true",
                        help="Print blip position only; verify tracking before recording")
     parser.add_argument("--monitor", type=int, default=None, help="Monitor index override")
+    parser.add_argument("--countdown", type=int, default=5,
+                       help="Seconds to count down after ENTER (0 to skip the wait)")
+    parser.add_argument("--duration", type=int, default=12,
+                       help="Preview: seconds to capture then auto-report (0 = until Ctrl+C)")
     args = parser.parse_args()
 
-    record(args.map, args.drop_dist, args.merge_dist, args.preview, args.monitor)
+    record(args.map, args.drop_dist, args.merge_dist, args.preview, args.monitor,
+           args.countdown, args.duration)

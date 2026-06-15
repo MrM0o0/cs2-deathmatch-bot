@@ -13,12 +13,23 @@ class MinimapReader:
     """Reads player position from the CS2 minimap."""
 
     def __init__(self, minimap_x: int, minimap_y: int, minimap_size: int,
-                 player_arrow_color: tuple[int, int, int] = (0, 255, 0)):
+                 player_arrow_color: tuple[int, int, int] = (0, 255, 0),
+                 hsv_lower: tuple[int, int, int] = (88, 120, 120),
+                 hsv_upper: tuple[int, int, int] = (104, 255, 255)):
+        """
+        Args:
+            hsv_lower, hsv_upper: OpenCV-HSV bounds for the local player blip.
+                Defaults match CS2's cyan player dot (measured HSV ~96,214,245).
+                The old green default never matched the real dot -- it was
+                latching onto green map markers instead.
+        """
         self.x = minimap_x
         self.y = minimap_y
         self.size = minimap_size
-        # BGR format for the player arrow color
+        # BGR format for the player arrow color (kept for reference/overlay).
         self.arrow_color = np.array(player_arrow_color[::-1], dtype=np.uint8)
+        self.hsv_lower = np.array(hsv_lower, dtype=np.uint8)
+        self.hsv_upper = np.array(hsv_upper, dtype=np.uint8)
         self._last_position = (minimap_size // 2, minimap_size // 2)
         self._last_angle = 0.0
 
@@ -34,14 +45,9 @@ class MinimapReader:
         if minimap.size == 0 or cv2 is None:
             return self._last_position, self._last_angle
 
-        # Find the player arrow by color matching
-        # The player icon is a bright colored triangle/arrow
+        # Find the player blip by color matching the configured HSV band.
         hsv = cv2.cvtColor(minimap, cv2.COLOR_BGR2HSV)
-
-        # Green arrow: H=40-80, S>100, V>100
-        lower = np.array([40, 100, 100])
-        upper = np.array([80, 255, 255])
-        mask = cv2.inRange(hsv, lower, upper)
+        mask = cv2.inRange(hsv, self.hsv_lower, self.hsv_upper)
 
         # Find centroid of the mask
         moments = cv2.moments(mask)

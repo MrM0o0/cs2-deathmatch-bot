@@ -84,7 +84,11 @@ class Bot:
         )
         self.hud_reader = HUDReader(self.config["regions"])
         mm = self.config["minimap"]
-        self.minimap_reader = MinimapReader(mm["x"], mm["y"], mm["size"])
+        self.minimap_reader = MinimapReader(
+            mm["x"], mm["y"], mm["size"],
+            hsv_lower=tuple(mm.get("hsv_lower", (88, 120, 120))),
+            hsv_upper=tuple(mm.get("hsv_upper", (104, 255, 255))),
+        )
 
         # Brain
         self.state_machine = StateMachine()

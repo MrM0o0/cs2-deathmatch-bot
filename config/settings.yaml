@@ -28,7 +28,10 @@ minimap:
   x: 16
   y: 16
   size: 256
-  player_arrow_color: [0, 255, 0]  # Green arrow
+  player_arrow_color: [0, 255, 255]  # Cyan player dot (CS2 local player)
+  # OpenCV-HSV band for the player dot. Measured on this setup: ~(96,214,245).
+  hsv_lower: [88, 120, 120]
+  hsv_upper: [104, 255, 255]
 
 detection:
   model_path: "models/cs2_yolov8n.onnx"

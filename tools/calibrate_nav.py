@@ -64,7 +64,9 @@ def calibrate(write: bool, test_counts: int, monitor: int) -> None:
         cfg = yaml.safe_load(f)
     mm = cfg["minimap"]
     reader = MinimapReader(mm["x"], mm["y"], mm["size"],
-                           player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 0))))
+                           player_arrow_color=tuple(mm.get("player_arrow_color", (0, 255, 255))),
+                           hsv_lower=tuple(mm.get("hsv_lower", (88, 120, 120))),
+                           hsv_upper=tuple(mm.get("hsv_upper", (104, 255, 255))))
     fwd = cfg["keybinds"]["forward"]
     monitor = monitor if monitor is not None else cfg["display"]["monitor"]
 
