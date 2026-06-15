@@ -57,7 +57,19 @@ def main():
         "--key",
         default="rmb",
         choices=sorted(KEYS),
-        help="Hold this to enable the pull (default: rmb)",
+        help="Activation key (default: rmb). Ignored when --mode always.",
+    )
+    ap.add_argument(
+        "--mode",
+        default="hold",
+        choices=["hold", "toggle", "always"],
+        help="hold = pull while key held; toggle = tap key to flip on/off; always = always on",
+    )
+    ap.add_argument(
+        "--fps",
+        type=int,
+        default=144,
+        help="Capture rate -- higher = less tracking lag (default 144, was 30 in config)",
     )
     ap.add_argument(
         "--strength",
@@ -102,7 +114,7 @@ def main():
     monitor = args.monitor if args.monitor is not None else cfg["display"]["monitor"]
     activate_vk = KEYS[args.key]
 
-    cap = ScreenCapture(monitor=monitor, target_fps=cfg["display"]["capture_fps"])
+    cap = ScreenCapture(monitor=monitor, target_fps=args.fps)
     print("[assist] capture:", cap.start())
 
     # Auto-detect resolution + crosshair centre from a real frame.
@@ -130,10 +142,12 @@ def main():
     win = "Aim Assist (END to quit)"
     if not args.no_window:
         cv2.namedWindow(win, cv2.WINDOW_NORMAL)
-    print(
-        f"[assist] running -- HOLD {args.key.upper()} to assist, END to quit "
-        f"(strength={args.strength}, deadzone={args.deadzone}px)"
-    )
+    how = {
+        "hold": f"HOLD {args.key.upper()}",
+        "toggle": f"TAP {args.key.upper()} to toggle",
+        "always": "ALWAYS ON",
+    }[args.mode]
+    print(f"[assist] running -- {how} to assist, END to quit (mode={args.mode}, fps={args.fps})")
 
     fps_t, frames, fps = time.perf_counter(), 0, 0.0
     start = time.perf_counter()
@@ -141,6 +155,8 @@ def main():
     prev_aim = None
     prev_aim_t = 0.0
     vel_x = vel_y = 0.0
+    toggled_on = False  # for --mode toggle
+    key_was_down = False
     while True:
         if user32.GetAsyncKeyState(END_VK) & 0x8000:
             break
@@ -164,7 +180,17 @@ def main():
         if enemies:
             target = min(enemies, key=lambda d: distance(d.center, (cx, cy)))
 
-        held = bool(user32.GetAsyncKeyState(activate_vk) & 0x8000)
+        # Resolve whether the assist is active this tick from the chosen mode.
+        key_down = bool(user32.GetAsyncKeyState(activate_vk) & 0x8000)
+        if args.mode == "always":
+            held = True
+        elif args.mode == "toggle":
+            if key_down and not key_was_down:  # rising edge = flip
+                toggled_on = not toggled_on
+            held = toggled_on
+        else:  # hold
+            held = key_down
+        key_was_down = key_down
         pulling = False
         screen_dist = 0.0
 
@@ -194,9 +220,16 @@ def main():
             vel_x = vel_y = 0.0
 
         if target is not None and held:
-            # Lead the target: aim where it's heading, not where it was last frame.
-            lead_x = aim_x + vel_x * args.lead
-            lead_y = aim_y + vel_y * args.lead
+            # Lead the target, but clamp the offset to the target's body so the
+            # aim point can never fly onto a wall. When you strafe, a stationary
+            # bot *slides* across screen and looks like it's moving -- without
+            # this clamp the lead overshoots past it onto the wall, then settles.
+            half_w = (target.x2 - target.x1) * 0.5
+            half_h = (target.y2 - target.y1) * 0.5
+            off_x = max(-half_w, min(half_w, vel_x * args.lead))
+            off_y = max(-half_h, min(half_h, vel_y * args.lead))
+            lead_x = aim_x + off_x
+            lead_y = aim_y + off_y
             dx_pixels = lead_x - cx
             dy_pixels = lead_y - cy
             screen_dist = distance((cx, cy), (aim_x, aim_y))
