@@ -6,6 +6,7 @@ import random
 import sys
 import threading
 import time
+from collections import deque
 
 import yaml
 
@@ -191,6 +192,8 @@ class Bot:
         self.paused = False
         self._is_stuck = False
         self._nudge_ticks = 0  # BC-mode unstick: commit to a turn sweep when jammed
+        self._nudge_dir = -1
+        self._bc_pos_hist: deque = deque(maxlen=30)  # ~1.5s of minimap positions
 
     def start(self) -> None:
         """Initialize all systems and start the main loop."""
@@ -381,6 +384,7 @@ class Bot:
                     nav_route=nav.get("has_route"),
                     bc_turn=nav.get("turn_class"),
                     bc_keys=nav.get("key_probs"),
+                    bc_stuck=nav.get("bc_stuck"),
                     bc_move=[nav.get("forward"), nav.get("left"), nav.get("back"), nav.get("right")]
                     if "key_probs" in nav
                     else None,
@@ -554,12 +558,22 @@ class Bot:
         # Learned behavioural-cloning policy takes priority when loaded.
         if self.bc_policy is not None:
             cmd = self.bc_policy.act(frame)
-            # Light unstick: when jammed against geometry, commit to a ~0.5s turn
-            # sweep (still moving forward, so it arcs out) instead of the old
-            # backup-into-wall loop. Sustained so the frame-diff clearing doesn't
-            # cut it short after one tick.
-            if self._nudge_ticks <= 0 and self._is_stuck:
-                self._nudge_ticks = 15
+
+            # Position-based stuck detection: the minimap dot only moves when the
+            # player actually moves, so it catches "grinding a wall while slowly
+            # turning" -- which the frame-diff detector misses (the view changes,
+            # so it thinks all is well). On stuck, commit to a hard turn sweep in
+            # a random direction (still moving forward, so it arcs out).
+            pos, _ = self.minimap_reader.read(frame)
+            self._bc_pos_hist.append(pos)
+            pos_stuck = False
+            if len(self._bc_pos_hist) == self._bc_pos_hist.maxlen:
+                ox, oy = self._bc_pos_hist[0]
+                moved = ((pos[0] - ox) ** 2 + (pos[1] - oy) ** 2) ** 0.5
+                pos_stuck = moved < 3.0
+            if self._nudge_ticks <= 0 and pos_stuck:
+                self._nudge_ticks = 20
+                self._nudge_dir = random.choice([-1, 1])
             if self._nudge_ticks > 0:
                 self._nudge_ticks -= 1
                 hard = self.config.get("bc_movement", {}).get("hard_turn", 400)
@@ -569,8 +583,9 @@ class Bot:
                     "back": False,
                     "left": False,
                     "right": False,
-                    "turn_x": hard,
+                    "turn_x": self._nudge_dir * hard,
                 }
+            cmd["bc_stuck"] = pos_stuck
             self._last_nav_cmd = cmd
             self._release_all_movement()
             for flag, bind in (
