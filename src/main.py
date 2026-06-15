@@ -191,9 +191,10 @@ class Bot:
         self._tick_count = 0
         self.paused = False
         self._is_stuck = False
-        self._nudge_ticks = 0  # BC-mode unstick: commit to a turn sweep when jammed
+        self._nudge_ticks = 0  # unstick: commit to a turn sweep when jammed
         self._nudge_dir = -1
         self._bc_pos_hist: deque = deque(maxlen=30)  # ~1.5s of minimap positions
+        self._turn_state = 0.0  # low-pass state for smooth camera turning
 
     def start(self) -> None:
         """Initialize all systems and start the main loop."""
@@ -338,10 +339,10 @@ class Bot:
             # 4. Check stuck.
             is_moving = len(self._movement_keys_held) > 0
             self._is_stuck = self.stuck_detector.update(frame, is_moving)
-            # In BC mode the learned policy owns movement, so we keep the legacy
-            # FSM out of STUCK (its backup-into-wall loop hijacked the bot); the
-            # policy's own light turn-nudge handles being jammed instead.
-            is_stuck = False if self.bc_policy is not None else self._is_stuck
+            # Stuck recovery lives in _roam now (minimap turn-sweep), so keep the
+            # legacy FSM out of STUCK entirely -- its backup-into-wall loop was
+            # what hijacked movement.
+            is_stuck = False
 
             # 5. Prioritize targets
             enemies = self.threat_assessor.prioritize_targets(detections)
@@ -554,95 +555,62 @@ class Bot:
             self._movement_keys_held.add(keybinds["right"])
 
     def _roam(self, frame, keybinds: dict) -> None:
-        """Handle roaming movement."""
-        # Learned behavioural-cloning policy takes priority when loaded.
-        if self.bc_policy is not None:
+        """Roaming movement with a unified minimap anti-stick for any driver."""
+        pos, _ = self.minimap_reader.read(frame)
+        self._bc_pos_hist.append(pos)
+
+        # Position-stuck: minimap dot frozen while we believe we're moving.
+        # Catches wall-grinding the frame-diff detector misses (a turning view
+        # looks like motion). Recovery is a committed turn-sweep -- never the
+        # old backup-into-wall loop.
+        pos_stuck = False
+        if len(self._bc_pos_hist) == self._bc_pos_hist.maxlen:
+            ox, oy = self._bc_pos_hist[0]
+            pos_stuck = ((pos[0] - ox) ** 2 + (pos[1] - oy) ** 2) ** 0.5 < 3.0
+        if self._nudge_ticks <= 0 and pos_stuck:
+            self._nudge_ticks = 20
+            self._nudge_dir = random.choice([-1, 1])
+
+        # Pick the driver: unstick sweep > BC policy > waypoint nav > wall-follow.
+        if self._nudge_ticks > 0:
+            self._nudge_ticks -= 1
+            hard = self.config.get("bc_movement", {}).get("hard_turn", 400)
+            cmd = {"forward": True, "turn_x": self._nudge_dir * hard}
+        elif self.bc_policy is not None:
             cmd = self.bc_policy.act(frame)
-
-            # Position-based stuck detection: the minimap dot only moves when the
-            # player actually moves, so it catches "grinding a wall while slowly
-            # turning" -- which the frame-diff detector misses (the view changes,
-            # so it thinks all is well). On stuck, commit to a hard turn sweep in
-            # a random direction (still moving forward, so it arcs out).
-            pos, _ = self.minimap_reader.read(frame)
-            self._bc_pos_hist.append(pos)
-            pos_stuck = False
-            if len(self._bc_pos_hist) == self._bc_pos_hist.maxlen:
-                ox, oy = self._bc_pos_hist[0]
-                moved = ((pos[0] - ox) ** 2 + (pos[1] - oy) ** 2) ** 0.5
-                pos_stuck = moved < 3.0
-            if self._nudge_ticks <= 0 and pos_stuck:
-                self._nudge_ticks = 20
-                self._nudge_dir = random.choice([-1, 1])
-            if self._nudge_ticks > 0:
-                self._nudge_ticks -= 1
-                hard = self.config.get("bc_movement", {}).get("hard_turn", 400)
-                cmd = {
-                    **cmd,
-                    "forward": True,
-                    "back": False,
-                    "left": False,
-                    "right": False,
-                    "turn_x": self._nudge_dir * hard,
-                }
-            cmd["bc_stuck"] = pos_stuck
-            self._last_nav_cmd = cmd
-            self._release_all_movement()
-            for flag, bind in (
-                ("forward", "forward"),
-                ("back", "back"),
-                ("left", "left"),
-                ("right", "right"),
-                ("crouch", "crouch"),
-            ):
-                if cmd.get(flag):
-                    keyboard.hold_key(keybinds[bind])
-                    self._movement_keys_held.add(keybinds[bind])
-            if cmd["turn_x"] != 0:
-                mouse.move_relative(cmd["turn_x"], 0)
-            return
-
-        # Use waypoint navigation if available
-        if self.nav_controller.has_waypoints():
-            pos, _ = self.minimap_reader.read(frame)
+        elif self.nav_controller.has_waypoints():
             cmd = self.nav_controller.update(pos)
-            self._last_nav_cmd = cmd
-            if cmd["has_route"]:
-                self._release_all_movement()
-                if cmd["forward"]:
-                    keyboard.hold_key(keybinds["forward"])
-                    self._movement_keys_held.add(keybinds["forward"])
-                if cmd["back"]:
-                    keyboard.hold_key(keybinds["back"])
-                    self._movement_keys_held.add(keybinds["back"])
-                if cmd["left"]:
-                    keyboard.hold_key(keybinds["left"])
-                    self._movement_keys_held.add(keybinds["left"])
-                if cmd["right"]:
-                    keyboard.hold_key(keybinds["right"])
-                    self._movement_keys_held.add(keybinds["right"])
-                if cmd["turn_x"] != 0:
-                    mouse.move_relative(cmd["turn_x"], 0)
-                return
+            if not cmd.get("has_route"):
+                cmd = self.explorer.get_movement(frame)
+        else:
+            cmd = self.explorer.get_movement(frame)
 
-        # Fallback: reactive wall-following
-        movement = self.explorer.get_movement(frame)
+        cmd["bc_stuck"] = pos_stuck
+        self._last_nav_cmd = cmd
+        self._apply_move(cmd, keybinds)
 
+    def _apply_move(self, cmd: dict, keybinds: dict) -> None:
+        """Execute a movement command (held keys + smoothed view turn)."""
         self._release_all_movement()
+        for flag, bind in (
+            ("forward", "forward"),
+            ("back", "back"),
+            ("left", "left"),
+            ("right", "right"),
+            ("crouch", "crouch"),
+        ):
+            if cmd.get(flag):
+                keyboard.hold_key(keybinds[bind])
+                self._movement_keys_held.add(keybinds[bind])
+        turn = self._smooth_turn(int(cmd.get("turn_x", 0)))
+        if turn != 0:
+            mouse.move_relative(turn, 0)
 
-        if movement["forward"]:
-            keyboard.hold_key(keybinds["forward"])
-            self._movement_keys_held.add(keybinds["forward"])
-
-        if movement["left"]:
-            keyboard.hold_key(keybinds["left"])
-            self._movement_keys_held.add(keybinds["left"])
-        elif movement["right"]:
-            keyboard.hold_key(keybinds["right"])
-            self._movement_keys_held.add(keybinds["right"])
-
-        if movement["turn_x"] != 0:
-            mouse.move_relative(movement["turn_x"], 0)
+    def _smooth_turn(self, target: int) -> int:
+        """Low-pass the view turn so the camera eases instead of jerking each
+        tick (kills the twitchy look). Sustained turns still reach full speed."""
+        self._turn_state += (target - self._turn_state) * 0.4
+        return int(round(self._turn_state))
 
     def _handle_unstick(self, phase: str, keybinds: dict) -> None:
         """Handle stuck recovery phases."""
