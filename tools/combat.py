@@ -226,7 +226,13 @@ def main():
     ap.add_argument("--track-radius", type=float, default=140.0, help="Px to switch to track ease")
     ap.add_argument("--aim-deadzone", type=float, default=3.0, help="Px where the aim pull stops")
     ap.add_argument(
-        "--aim-max-step", type=int, default=45, help="Max mouse counts/tick (lower=human)"
+        "--aim-max-step", type=int, default=35, help="Max mouse counts/tick (lower=smoother/human)"
+    )
+    ap.add_argument(
+        "--smooth",
+        type=float,
+        default=0.4,
+        help="Target low-pass per detection frame (lower = smoother/glidier, higher = snappier)",
     )
     ap.add_argument("--head", action="store_true", help="Aim head instead of chest")
     # --- fire (R3) ---
@@ -235,7 +241,7 @@ def main():
     ap.add_argument("--reaction-max", type=float, default=0.12, help="Max engage delay (s)")
     ap.add_argument("--burst", type=int, default=9, help="Bullets per burst")
     ap.add_argument("--rpm", type=float, default=600.0, help="Fire rate (AK = 600)")
-    ap.add_argument("--recoil-pull", type=float, default=128.0, help="Counts pulled DOWN per shot")
+    ap.add_argument("--recoil-pull", type=float, default=152.0, help="Counts pulled DOWN per shot")
     ap.add_argument("--cooldown", type=float, default=0.4, help="Min seconds between bursts")
     ap.add_argument(
         "--kill-grace", type=float, default=0.10, help="Keep firing N s after target gone"
@@ -272,6 +278,7 @@ def main():
     residual_x = residual_y = 0.0
     last_stamp = None
     applied_x = applied_y = 0.0
+    smooth_x = smooth_y = None  # low-passed target the aim glides toward
     toggled_on = False
     key_was_down = False
     aligned_since = None
@@ -314,8 +321,16 @@ def main():
                     if stamp != last_stamp:
                         last_stamp = stamp
                         applied_x = applied_y = 0.0
-                    px = aim_x - cx
-                    py = aim_y - cy
+                        # Low-pass the target across detection frames so box
+                        # jitter doesn't make the mouse twitch. Snap on a big
+                        # jump (target switch) instead of gliding across screen.
+                        if smooth_x is None or math.hypot(aim_x - smooth_x, aim_y - smooth_y) > 200:
+                            smooth_x, smooth_y = aim_x, aim_y
+                        else:
+                            smooth_x += args.smooth * (aim_x - smooth_x)
+                            smooth_y += args.smooth * (aim_y - smooth_y)
+                    px = smooth_x - cx
+                    py = smooth_y - cy
                     screen_dist = math.hypot(px, py)
                     if screen_dist > args.aim_deadzone:
                         gap_dx, gap_dy = screen_delta_to_mouse(
@@ -383,6 +398,7 @@ def main():
                             last_stamp = None
                             applied_x = applied_y = 0.0
                             residual_x = residual_y = 0.0
+                            smooth_x = smooth_y = None
                             if not alive:
                                 break
                     else:
@@ -391,6 +407,7 @@ def main():
                 residual_x = residual_y = 0.0
                 applied_x = applied_y = 0.0
                 last_stamp = None
+                smooth_x = smooth_y = None
                 aligned_since = None
 
             if now - status_t >= 0.5:
