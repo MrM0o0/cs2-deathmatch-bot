@@ -109,12 +109,9 @@ class BoxTracker(threading.Thread):
 
             dets = conf.update(det.detect(frame))
             self.infer_ms = det.inference_ms
-            # Bodies only -- never trigger off a stray head box. Prefer the body
-            # class, fall back to "anything that is not a head" (robust whether
-            # the model is the old 2-class one or the new single-class "player").
-            enemies = [d for d in dets if d.class_name == "ct_player"]
-            if not enemies:
-                enemies = [d for d in dets if not getattr(d, "is_head", False)]
+            # Single-class model: every detection is an enemy player (skip any
+            # stray head box for safety; the model emits none).
+            enemies = [d for d in dets if not getattr(d, "is_head", False)]
             self.n_enemies = len(enemies)
             self.boxes = tuple((d.x1, d.y1, d.x2, d.y2) for d in enemies)
         cap.stop()

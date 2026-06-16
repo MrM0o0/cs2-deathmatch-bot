@@ -114,9 +114,8 @@ class TargetTracker(threading.Thread):
 
             dets = conf.update(det.detect(frame))
             self.infer_ms = det.inference_ms
-            enemies = [d for d in dets if d.class_name == "ct_player"]
-            if not enemies:
-                enemies = [d for d in dets if not getattr(d, "is_head", False)]
+            # Single-class model: every detection is an enemy player.
+            enemies = [d for d in dets if not getattr(d, "is_head", False)]
             self.n_enemies = len(enemies)
 
             if not enemies:

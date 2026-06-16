@@ -32,6 +32,7 @@ merged_dataset*/
 *.yolov8/
 CS2.yolov8/
 models/training/
+models/*backup*.onnx
 
 # Diagnostic / run logs
 tools/diagnostic_log.txt

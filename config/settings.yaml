@@ -39,7 +39,7 @@ detection:
   confidence_threshold: 0.45
   nms_threshold: 0.5
   input_size: 640
-  classes: ["ct_player", "head"]
+  classes: ["player"]   # single-class model (best.onnx, 2026-06-16): everyone is an enemy
 
 confirmation:
   min_confirm_frames: 3       # Frames a target must persist before acting

@@ -112,10 +112,9 @@ class TargetTracker(threading.Thread):
 
             dets = conf.update(det.detect(frame))
             self.infer_ms = det.inference_ms
-            # Bodies only (robust to the old 2-class model or new single-class).
-            enemies = [d for d in dets if d.class_name == "ct_player"]
-            if not enemies:
-                enemies = [d for d in dets if not getattr(d, "is_head", False)]
+            # Single-class model: every detection is an enemy player (skip any
+            # stray head box for safety; the model emits none).
+            enemies = [d for d in dets if not getattr(d, "is_head", False)]
             self.n_enemies = len(enemies)
 
             if not enemies:

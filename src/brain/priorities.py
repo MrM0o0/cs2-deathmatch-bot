@@ -38,9 +38,10 @@ class ThreatAssessor:
         """Sort detections by threat level.
 
         Returns enemies sorted by threat (highest first).
-        In DM, everyone is an enemy - prefer body (ct_player) detections.
+        In DM, everyone is an enemy (single-class model -> every detection;
+        skip any stray head box for safety).
         """
-        enemies = [d for d in detections if d.class_name == "ct_player"]
+        enemies = [d for d in detections if not d.is_head]
 
         if not enemies:
             return []

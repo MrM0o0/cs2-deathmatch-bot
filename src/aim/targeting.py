@@ -60,15 +60,12 @@ class TargetingSystem:
         """Select the best target from a list of detections.
 
         Prioritizes:
-        1. Body detections (ct_player) - skip head-only detections for targeting
+        1. Body detections - skip any head-only box (single-class: none)
         2. Closest to crosshair
         3. Higher confidence
         """
-        # In DM everyone is an enemy. Prefer body detections for aim target.
-        enemies = [d for d in detections if d.class_name == "ct_player"]
-        if not enemies:
-            # Fall back to any detection
-            enemies = [d for d in detections if not d.is_head]
+        # Single-class model: every detection is an enemy player.
+        enemies = [d for d in detections if not d.is_head]
         if not enemies:
             return None
 

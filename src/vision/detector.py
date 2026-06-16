@@ -78,7 +78,7 @@ class YOLODetector:
         self.input_size = input_size
         self.conf_thresh = confidence_threshold
         self.nms_thresh = nms_threshold
-        self.classes = classes or ["ct_player", "head"]
+        self.classes = classes or ["player"]
         self.session = None
         self.input_name = None
         self._inference_ms = 0.0

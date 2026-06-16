@@ -27,8 +27,8 @@ MODEL_PATH = os.path.join(os.path.dirname(__file__), "..", "models", "cs2_yolov8
 
 # Colors (BGR)
 COLORS_CONFIRMED = {
-    "ct_player": (0, 255, 0),  # Green
-    "head": (0, 0, 255),  # Red
+    "player": (0, 255, 0),  # Green
+    "head": (0, 0, 255),  # Red (legacy; single-class model emits no heads)
 }
 COLOR_RAW = (128, 128, 128)  # Gray for unconfirmed
 DEFAULT_COLOR = (255, 255, 0)
