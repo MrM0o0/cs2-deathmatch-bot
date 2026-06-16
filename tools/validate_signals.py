@@ -4,8 +4,9 @@ This does NOT drive the bot. You walk a route in CS2 yourself; it watches the
 minimap and records, every tick:
 
   - the detected blip position,
-  - the ellipse-fit "angle" from minimap.py (the suspect one),
+  - the cone heading from minimap.py (read off the white facing-cone),
   - a motion-derived heading (net blip displacement over ~1s, like navigator),
+    kept as a cross-check,
 
 to logs/<ts>/session.jsonl, plus every second it saves two images:
 
@@ -68,13 +69,13 @@ def load_minimap_reader():
     return reader, cfg, mm
 
 
-def annotate_minimap(minimap, blip, ellipse_deg, motion_deg):
+def annotate_minimap(minimap, blip, cone_deg, motion_deg):
     """Draw the detected blip + both heading rays onto a copy of the minimap."""
     img = minimap.copy()
     bx, by = blip
     cv2.circle(img, (bx, by), 4, (0, 255, 0), 1)
-    # ellipse angle (cyan) and motion heading (magenta), each a 30px ray
-    for deg, color in ((ellipse_deg, (255, 255, 0)), (motion_deg, (255, 0, 255))):
+    # cone heading (cyan) and motion heading (magenta), each a 30px ray
+    for deg, color in ((cone_deg, (255, 255, 0)), (motion_deg, (255, 0, 255))):
         if deg is None:
             continue
         rad = math.radians(deg)
@@ -83,7 +84,7 @@ def annotate_minimap(minimap, blip, ellipse_deg, motion_deg):
         cv2.line(img, (bx, by), (ex, ey), color, 1)
     cv2.putText(
         img,
-        f"e={ellipse_deg:.0f} m={'--' if motion_deg is None else f'{motion_deg:.0f}'}",
+        f"c={cone_deg:.0f} m={'--' if motion_deg is None else f'{motion_deg:.0f}'}",
         (4, 14),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.4,
@@ -154,7 +155,7 @@ def main():
             time.sleep(0.002)
             continue
 
-        (bx, by), ellipse_deg = reader.read(frame)
+        (bx, by), cone_deg = reader.read(frame)
         ticks += 1
         positions.append((float(bx), float(by)))
         trail.append((bx, by))
@@ -172,7 +173,7 @@ def main():
             t=round(now - start, 3),
             x=bx,
             y=by,
-            ellipse_deg=round(float(ellipse_deg), 1),
+            cone_deg=round(float(cone_deg), 1),
             motion_deg=None if motion_deg is None else round(motion_deg, 1),
         )
 
@@ -182,7 +183,7 @@ def main():
                 stamp = f"{now - start:06.1f}".replace(".", "_")
                 cv2.imwrite(
                     os.path.join(logger.session_dir, f"minimap_{stamp}.jpg"),
-                    annotate_minimap(minimap, (bx, by), ellipse_deg, motion_deg),
+                    annotate_minimap(minimap, (bx, by), cone_deg, motion_deg),
                     [cv2.IMWRITE_JPEG_QUALITY, 85],
                 )
                 mc = marker_crop(minimap, (bx, by))
@@ -197,7 +198,7 @@ def main():
         if now - status_t >= 0.5:
             md = "--" if motion_deg is None else f"{motion_deg:5.0f}"
             print(
-                f"\r[validate] blip=({bx:4d},{by:4d}) ellipse={ellipse_deg:5.0f} "
+                f"\r[validate] blip=({bx:4d},{by:4d}) cone={cone_deg:5.0f} "
                 f"motion={md} | ticks {ticks}   ",
                 end="",
                 flush=True,
