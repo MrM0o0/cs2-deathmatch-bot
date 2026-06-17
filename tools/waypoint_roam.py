@@ -1,29 +1,26 @@
-"""Waypoint roam -- traverse a map along authored routes (purposeful, human-like).
+"""Trail roam -- REPLAY the exact route you recorded, in order, on a loop.
 
-The reactive radar roam wanders; this follows a recorded waypoint graph so the
-bot moves like it knows the map. Works from ANY spawn (DM is random): it reads
-its absolute position from the radar dot, snaps to the nearest node, A*-routes to
-a far node, and walks the path -- re-planning a new destination on arrival.
+Not routing -- replay. It follows the recorded breadcrumbs IN ORDER (the order
+you walked them), so it only ever goes where you actually went. No A*, no random
+goals, no auto shortcut-links (those made it cut through walls / go places you
+never walked). Works from ANY spawn (DM is random): it snaps to the nearest
+point on your trail, then traces the path from there, looping at the end.
 
-Steering reuses what we proved out: facing from the dot's MOTION (not the cone),
-angle-sized turns. The radar + stall-jump ride underneath as a safety net: if the
-dot stalls (a prop/box the radar can't see), jump; if jumps don't free it, skip
-to the next node.
-
-Saves an annotated map (graph + route + target + dot) each ~0.7s to logs/<ts>/.
+Facing comes from the dot's MOTION (slow-radar tuned). If it drifts off the trail
+it rejoins the nearest point; if it bumps something it sweeps past. Saves an
+annotated map each ~0.7s to logs/<ts>/.
 
 SAFETY -- dead-man: acts only WHILE YOU HOLD the run key (default L). Release =
 instant stop. END quits; --max-seconds backstops.
 
-    python tools/waypoint_roam.py                # HOLD L, follow dust2 routes
-    python tools/waypoint_roam.py --map mirage   # a different recorded map
+    python tools/waypoint_roam.py                # HOLD L, replay the dust2 trail
+    python tools/waypoint_roam.py --map mirage   # a different recorded trail
 """
 
 import argparse
 import ctypes
 import math
 import os
-import random
 import sys
 import time
 from collections import deque
@@ -81,19 +78,6 @@ def load_cfg():
         return yaml.safe_load(f)
 
 
-def plan_route(graph, pos, min_travel):
-    """A* route from the node nearest `pos` to a random node that's a real
-    distance away, so the bot actually travels. Returns a list of waypoint ids."""
-    start = graph.nearest(pos[0], pos[1])
-    if start is None:
-        return []
-    far = [w for w in graph.waypoints.values() if distance(start.pos(), w.pos()) > min_travel]
-    far = far or [w for w in graph.waypoints.values() if w.id != start.id]
-    if not far:
-        return []
-    return graph.shortest_path(start.id, random.choice(far).id)
-
-
 def annotate(region, graph, route, idx, pos, target, motion_deg):
     img = region.copy()
     for w in graph.waypoints.values():  # edges (faint) + nodes
@@ -127,10 +111,10 @@ def main():
     ap.add_argument("--run-key", default="l", help="HOLD this to roam")
     ap.add_argument("--reach", type=float, default=9.0, help="Px to a node to count as reached")
     ap.add_argument(
-        "--lookahead", type=int, default=3, help="Aim this many nodes ahead (anticipate corners)"
+        "--lookahead", type=int, default=2, help="Aim this many points ahead (anticipate corners)"
     )
     ap.add_argument(
-        "--min-travel", type=float, default=70.0, help="Min px a new destination must be"
+        "--resnap", type=float, default=35.0, help="Px off the trail before rejoining nearest point"
     )
     ap.add_argument("--deadzone", type=float, default=10.0, help="Deg error before turning")
     ap.add_argument("--slice", type=int, default=200, help="Max mouse counts per tick (smoothness)")
@@ -181,8 +165,14 @@ def main():
             keys_down.discard(k)
         mouse.release_all_buttons()
 
+    order = sorted(graph.waypoints)  # node ids in recorded (walk) order = the trail
+
+    def nearest_idx(p):
+        return min(range(len(order)), key=lambda i: distance(p, graph.waypoints[order[i]].pos()))
+
     active = False
-    route, ridx = [], 0
+    idx = 0
+    need_snap = True  # snap to nearest trail point on (re)start / after drifting off
     hist = deque(maxlen=40)  # ~1.3s of positions for slow-dot motion estimate
     motion_deg = None
     last_move_t = 0.0
@@ -207,7 +197,7 @@ def main():
                     active = False
                     hist.clear()
                     motion_deg = None
-                    route = []
+                    need_snap = True
                 time.sleep(0.02)
                 if now - status_t >= 0.5:
                     print("\r[wp] IDLE (hold key to roam)        ", end="", flush=True)
@@ -220,7 +210,7 @@ def main():
                 hist.clear()
                 motion_deg = None
                 last_move_t = now
-                route = []
+                need_snap = True
 
             frame = cap.grab()
             if frame is None:
@@ -240,22 +230,20 @@ def main():
                 motion_deg = angle_between(old, pos)
                 last_move_t = now
 
-            # (re)plan when we have no route or finished it
-            while (
-                ridx < len(route) and distance(pos, graph.waypoints[route[ridx]].pos()) < args.reach
-            ):
-                ridx += 1  # reached this node
-            if ridx >= len(route):
-                route = plan_route(graph, pos, args.min_travel)
-                ridx = 1 if len(route) > 1 else 0
-
-            target = graph.waypoints[route[ridx]] if ridx < len(route) else None
-            # Steer toward a node a little FURTHER along the route (lookahead) so
-            # turns start before the corner -> a racing line, not an overshoot.
-            steer_target = target
-            if ridx < len(route):
-                steer_idx = min(ridx + args.lookahead, len(route) - 1)
-                steer_target = graph.waypoints[route[steer_idx]]
+            # Follow the recorded trail IN ORDER (no A*, no random goals, no
+            # shortcut links) -- so it only goes exactly where you walked, looping.
+            if need_snap:
+                idx = nearest_idx(pos)  # rejoin the trail at the closest point
+                need_snap = False
+            cur = graph.waypoints[order[idx]]
+            d_cur = distance(pos, cur.pos())
+            if d_cur < args.reach:
+                idx = (idx + 1) % len(order)  # reached this point -> next on the trail
+            elif d_cur > args.resnap:
+                idx = nearest_idx(pos)  # drifted off -> rejoin nearest trail point
+            target = graph.waypoints[order[idx]]
+            # Aim a couple points further ALONG the trail so corners start early.
+            steer_target = graph.waypoints[order[(idx + args.lookahead) % len(order)]]
             press("w")
             state = "walk"
             if target is not None:
@@ -272,7 +260,7 @@ def main():
                     mouse.move_relative(sweep_dir * args.slice, 0)
                     state = "around"
                     if now - stall_start > args.skip_after:
-                        ridx += 1
+                        idx = (idx + 1) % len(order)  # can't pass -> skip ahead on trail
                         stall_start = now
                         sweep_dir = -sweep_dir
                 else:
@@ -285,7 +273,7 @@ def main():
                 stamp = f"{now - start:06.1f}".replace(".", "_")
                 cv2.imwrite(
                     os.path.join(logger.session_dir, f"nav_{stamp}_{state}.jpg"),
-                    annotate(region, graph, route, ridx, pos, steer_target, motion_deg),
+                    annotate(region, graph, order, idx, pos, steer_target, motion_deg),
                     [cv2.IMWRITE_JPEG_QUALITY, 85],
                 )
                 last_dump = now
@@ -295,11 +283,11 @@ def main():
                 x=bx,
                 y=by,
                 state=state,
-                node=route[ridx] if ridx < len(route) else -1,
+                node=order[idx],
                 motion=None if motion_deg is None else round(motion_deg),
             )
             if now - status_t >= 0.4:
-                tgt = f"#{route[ridx]}" if ridx < len(route) else "--"
+                tgt = f"#{order[idx]}"
                 print(
                     f"\r[wp] {state:6s} | pos {bx:3d},{by:3d} -> node {tgt}   ", end="", flush=True
                 )
