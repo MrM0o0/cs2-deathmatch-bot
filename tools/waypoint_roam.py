@@ -127,6 +127,9 @@ def main():
     ap.add_argument("--run-key", default="l", help="HOLD this to roam")
     ap.add_argument("--reach", type=float, default=9.0, help="Px to a node to count as reached")
     ap.add_argument(
+        "--lookahead", type=int, default=3, help="Aim this many nodes ahead (anticipate corners)"
+    )
+    ap.add_argument(
         "--min-travel", type=float, default=70.0, help="Min px a new destination must be"
     )
     ap.add_argument("--deadzone", type=float, default=10.0, help="Deg error before turning")
@@ -247,10 +250,16 @@ def main():
                 ridx = 1 if len(route) > 1 else 0
 
             target = graph.waypoints[route[ridx]] if ridx < len(route) else None
+            # Steer toward a node a little FURTHER along the route (lookahead) so
+            # turns start before the corner -> a racing line, not an overshoot.
+            steer_target = target
+            if ridx < len(route):
+                steer_idx = min(ridx + args.lookahead, len(route) - 1)
+                steer_target = graph.waypoints[route[steer_idx]]
             press("w")
             state = "walk"
             if target is not None:
-                node_bearing = angle_between(pos, target.pos())
+                node_bearing = angle_between(pos, steer_target.pos())
                 stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
                 if not stalled:
                     stall_start = now
@@ -276,7 +285,7 @@ def main():
                 stamp = f"{now - start:06.1f}".replace(".", "_")
                 cv2.imwrite(
                     os.path.join(logger.session_dir, f"nav_{stamp}_{state}.jpg"),
-                    annotate(region, graph, route, ridx, pos, target, motion_deg),
+                    annotate(region, graph, route, ridx, pos, steer_target, motion_deg),
                     [cv2.IMWRITE_JPEG_QUALITY, 85],
                 )
                 last_dump = now
