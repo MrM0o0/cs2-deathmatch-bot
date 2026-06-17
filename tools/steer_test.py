@@ -119,7 +119,7 @@ def main():
     ap.add_argument(
         "--smooth",
         type=float,
-        default=0.35,
+        default=0.25,
         help="Heading low-pass (circular EMA, 0..1; lower = smoother/steadier)",
     )
     ap.add_argument("--hold", type=float, default=0.6, help="Seconds on-bearing before next target")
