@@ -1,0 +1,306 @@
+"""Waypoint roam -- traverse a map along authored routes (purposeful, human-like).
+
+The reactive radar roam wanders; this follows a recorded waypoint graph so the
+bot moves like it knows the map. Works from ANY spawn (DM is random): it reads
+its absolute position from the radar dot, snaps to the nearest node, A*-routes to
+a far node, and walks the path -- re-planning a new destination on arrival.
+
+Steering reuses what we proved out: facing from the dot's MOTION (not the cone),
+angle-sized turns. The radar + stall-jump ride underneath as a safety net: if the
+dot stalls (a prop/box the radar can't see), jump; if jumps don't free it, skip
+to the next node.
+
+Saves an annotated map (graph + route + target + dot) each ~0.7s to logs/<ts>/.
+
+SAFETY -- dead-man: acts only WHILE YOU HOLD the run key (default L). Release =
+instant stop. END quits; --max-seconds backstops.
+
+    python tools/waypoint_roam.py                # HOLD L, follow dust2 routes
+    python tools/waypoint_roam.py --map mirage   # a different recorded map
+"""
+
+import argparse
+import ctypes
+import math
+import os
+import random
+import sys
+import time
+from collections import deque
+
+import yaml
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
+
+from src.capture.screen import ScreenCapture
+from src.input import keyboard, mouse
+from src.movement.navigator import WaypointGraph
+from src.movement.occupancy import clearance_at, radar_clearances
+from src.utils.math_helpers import angle_between, distance, normalize_angle
+from src.utils.session_logger import SessionLogger
+from src.utils.timer_setup import enable_high_resolution_timer
+from src.vision.minimap import MinimapReader
+
+SPECIAL = {"insert": 0x2D, "end": 0x23, "home": 0x24, "rshift": 0xA1, "rctrl": 0xA3}
+END_VK = 0x23
+N_RAYS = 24
+MAX_R = 46
+
+
+def key_vk(name):
+    name = name.lower()
+    if name in SPECIAL:
+        return SPECIAL[name]
+    if len(name) == 1 and name.isalpha():
+        return ord(name.upper())
+    raise ValueError(f"unknown run-key: {name!r}")
+
+
+def held(vk):
+    return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+def load_cfg():
+    with open(os.path.join(PROJECT_ROOT, "config", "settings.yaml")) as f:
+        return yaml.safe_load(f)
+
+
+def plan_route(graph, pos, min_travel):
+    """A* route from the node nearest `pos` to a random node that's a real
+    distance away, so the bot actually travels. Returns a list of waypoint ids."""
+    start = graph.nearest(pos[0], pos[1])
+    if start is None:
+        return []
+    far = [w for w in graph.waypoints.values() if distance(start.pos(), w.pos()) > min_travel]
+    far = far or [w for w in graph.waypoints.values() if w.id != start.id]
+    if not far:
+        return []
+    return graph.shortest_path(start.id, random.choice(far).id)
+
+
+def annotate(region, graph, route, idx, pos, target, motion_deg):
+    img = region.copy()
+    for w in graph.waypoints.values():  # edges (faint) + nodes
+        for nb in w.neighbors:
+            o = graph.waypoints.get(nb)
+            if o:
+                cv2.line(img, (int(w.x), int(w.y)), (int(o.x), int(o.y)), (70, 70, 70), 1)
+    for i in range(1, len(route)):  # current route in cyan
+        a = graph.waypoints[route[i - 1]]
+        b = graph.waypoints[route[i]]
+        cv2.line(img, (int(a.x), int(a.y)), (int(b.x), int(b.y)), (200, 200, 0), 1)
+    if target is not None:
+        cv2.circle(img, (int(target.x), int(target.y)), 4, (255, 80, 0), -1)
+    bx, by = pos
+    cv2.circle(img, (bx, by), 3, (255, 255, 255), 1)
+    if motion_deg is not None:
+        r = math.radians(motion_deg)
+        cv2.line(
+            img,
+            (bx, by),
+            (int(bx + 18 * math.cos(r)), int(by + 18 * math.sin(r))),
+            (0, 255, 255),
+            2,
+        )
+    return cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Waypoint roam (follow a map's routes)")
+    ap.add_argument("--map", default="dust2", help="Map name (config/maps/<map>.json)")
+    ap.add_argument("--run-key", default="l", help="HOLD this to roam")
+    ap.add_argument("--reach", type=float, default=22.0, help="Px to a node to count as reached")
+    ap.add_argument(
+        "--min-travel", type=float, default=70.0, help="Min px a new destination must be"
+    )
+    ap.add_argument("--deadzone", type=float, default=12.0, help="Deg error before turning")
+    ap.add_argument("--slice", type=int, default=200, help="Max mouse counts per tick (smoothness)")
+    ap.add_argument(
+        "--cpd", type=float, default=0.0, help="Counts per degree (0 = from sensitivity)"
+    )
+    ap.add_argument(
+        "--stuck-secs", type=float, default=1.0, help="No motion this long -> jump/skip"
+    )
+    ap.add_argument(
+        "--obstacle-clear", type=float, default=12.0, help="Radar-open ahead -> jumpable"
+    )
+    ap.add_argument("--max-jumps", type=int, default=2, help="Jumps before skipping a node")
+    ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
+    args = ap.parse_args()
+
+    if cv2 is None:
+        print("[wp] cv2/numpy missing -- aborting.")
+        return
+
+    graph = WaypointGraph()
+    graph.load(os.path.join(PROJECT_ROOT, "config", "maps", f"{args.map}.json"))
+    if not graph.waypoints:
+        print(f"[wp] no waypoints for '{args.map}'. Record with tools/record_waypoints.py first.")
+        return
+
+    enable_high_resolution_timer()
+    cfg = load_cfg()
+    mm, g = cfg["minimap"], cfg["game"]
+    mx, my, msz = mm["x"], mm["y"], mm["size"]
+    cpd = args.cpd if args.cpd > 0 else 1.0 / (g["sensitivity"] * g["m_yaw"])
+    reader = MinimapReader(mx, my, msz, sat_min=mm["sat_min"], val_min=mm["val_min"])
+    run_vk = key_vk(args.run_key)
+    cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=60)
+    cap.start()
+    logger = SessionLogger(os.path.join(PROJECT_ROOT, "logs"), enabled=True)
+    print(f"[wp] {args.map}: {len(graph.waypoints)} nodes. HOLD {args.run_key.upper()} = roam.")
+
+    keys_down = set()
+
+    def press(k):
+        if k not in keys_down:
+            keyboard.key_down(k)
+            keys_down.add(k)
+
+    def release_all():
+        for k in list(keys_down):
+            keyboard.key_up(k)
+            keys_down.discard(k)
+        mouse.release_all_buttons()
+
+    active = False
+    route, ridx = [], 0
+    hist = deque(maxlen=20)
+    motion_deg = None
+    last_move_t = 0.0
+    jump_count = 0
+    last_jump_t = 0.0
+    sweep_dir = 1
+    last_dump = 0.0
+    status_t = 0.0
+    start = time.perf_counter()
+
+    try:
+        while True:
+            if held(END_VK):
+                break
+            now = time.perf_counter()
+            if args.max_seconds and now - start > args.max_seconds:
+                print("\n[wp] max-seconds reached.")
+                break
+
+            if not held(run_vk):  # dead-man
+                if active:
+                    release_all()
+                    active = False
+                    hist.clear()
+                    motion_deg = None
+                    route = []
+                time.sleep(0.02)
+                if now - status_t >= 0.5:
+                    print("\r[wp] IDLE (hold key to roam)        ", end="", flush=True)
+                    status_t = now
+                continue
+
+            if not active:
+                active = True
+                press("w")
+                hist.clear()
+                motion_deg = None
+                last_move_t = now
+                route = []
+
+            frame = cap.grab()
+            if frame is None:
+                time.sleep(0.002)
+                continue
+            (bx, by), _ = reader.read(frame)
+            pos = (bx, by)
+            region = frame[my : my + msz, mx : mx + msz]
+
+            # motion heading from recent dot displacement
+            hist.append((now, pos))
+            old = next((p for (t, p) in hist if t >= now - 0.5), hist[0][1])
+            if distance(old, pos) >= 4.0:
+                motion_deg = angle_between(old, pos)
+                last_move_t = now
+
+            # (re)plan when we have no route or finished it
+            while (
+                ridx < len(route) and distance(pos, graph.waypoints[route[ridx]].pos()) < args.reach
+            ):
+                ridx += 1  # reached this node
+            if ridx >= len(route):
+                route = plan_route(graph, pos, args.min_travel)
+                ridx = 1 if len(route) > 1 else 0
+
+            target = graph.waypoints[route[ridx]] if ridx < len(route) else None
+            press("w")
+            state = "walk"
+            if target is not None:
+                node_bearing = angle_between(pos, target.pos())
+                stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
+                if motion_deg is None:
+                    state = "spinup"  # walk to establish facing
+                elif stalled:
+                    gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+                    clrs = radar_clearances(gray, bx, by, N_RAYS, MAX_R, 5, 45)
+                    fwd = clearance_at(clrs, node_bearing)
+                    if (
+                        fwd >= args.obstacle_clear
+                        and jump_count < args.max_jumps
+                        and now - last_jump_t > 0.45
+                    ):
+                        keyboard.key_press("space", hold_ms=40)
+                        last_jump_t = now
+                        jump_count += 1
+                        state = "jump"
+                    else:  # can't reach this node -> skip to the next
+                        ridx += 1
+                        mouse.move_relative(sweep_dir * args.slice, 0)
+                        state = "skip"
+                else:
+                    jump_count = 0
+                    err = normalize_angle(node_bearing - motion_deg)
+                    sweep_dir = 1 if err >= 0 else -1
+                    if abs(err) > args.deadzone:
+                        mouse.move_relative(int(max(-args.slice, min(args.slice, err * cpd))), 0)
+                        state = "steer"
+
+            if now - last_dump >= 0.7:
+                stamp = f"{now - start:06.1f}".replace(".", "_")
+                cv2.imwrite(
+                    os.path.join(logger.session_dir, f"nav_{stamp}_{state}.jpg"),
+                    annotate(region, graph, route, ridx, pos, target, motion_deg),
+                    [cv2.IMWRITE_JPEG_QUALITY, 85],
+                )
+                last_dump = now
+
+            logger.log_tick(
+                t=round(now - start, 3),
+                x=bx,
+                y=by,
+                state=state,
+                node=route[ridx] if ridx < len(route) else -1,
+                motion=None if motion_deg is None else round(motion_deg),
+            )
+            if now - status_t >= 0.4:
+                tgt = f"#{route[ridx]}" if ridx < len(route) else "--"
+                print(
+                    f"\r[wp] {state:6s} | pos {bx:3d},{by:3d} -> node {tgt}   ", end="", flush=True
+                )
+                status_t = now
+
+            elapsed = time.perf_counter() - now
+            if elapsed < 1.0 / 30.0:
+                time.sleep(1.0 / 30.0 - elapsed)
+    finally:
+        release_all()
+        cap.stop()
+        logger.close()
+        print("\n[wp] stopped.")
+
+
+if __name__ == "__main__":
+    main()
