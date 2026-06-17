@@ -41,7 +41,6 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.capture.screen import ScreenCapture
 from src.input import keyboard, mouse
 from src.movement.navigator import WaypointGraph
-from src.movement.occupancy import best_direction, radar_clearances
 from src.utils.math_helpers import angle_between, distance, normalize_angle
 from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
@@ -66,16 +65,15 @@ def held(vk):
     return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
 
 
-def head_to_node(clrs, node_bearing, motion_deg, node_stick, deadzone, slice_, cpd):
-    """Steer toward the node, but let the radar deflect to the OPEN direction
-    nearest the node so it rounds walls/corners instead of bee-lining into them.
-    Returns (chosen_deg, sweep_dir)."""
-    ch = best_direction(clrs, node_bearing, node_stick)
-    err = normalize_angle(ch - motion_deg)
+def head_to_node(node_bearing, motion_deg, deadzone, slice_, cpd):
+    """Steer straight toward the next node. With a DENSE path the next node is
+    always close and on the safe route the user walked, so a straight segment
+    never cuts into a wall -- no radar wall-judging needed. Returns sweep_dir."""
+    err = normalize_angle(node_bearing - motion_deg)
     sweep_dir = 1 if err >= 0 else -1
     if abs(err) > deadzone:
         mouse.move_relative(int(max(-slice_, min(slice_, err * cpd))), 0)
-    return ch, sweep_dir
+    return sweep_dir
 
 
 def load_cfg():
@@ -127,27 +125,17 @@ def main():
     ap = argparse.ArgumentParser(description="Waypoint roam (follow a map's routes)")
     ap.add_argument("--map", default="dust2", help="Map name (config/maps/<map>.json)")
     ap.add_argument("--run-key", default="l", help="HOLD this to roam")
-    ap.add_argument("--reach", type=float, default=22.0, help="Px to a node to count as reached")
+    ap.add_argument("--reach", type=float, default=12.0, help="Px to a node to count as reached")
     ap.add_argument(
         "--min-travel", type=float, default=70.0, help="Min px a new destination must be"
     )
-    ap.add_argument("--deadzone", type=float, default=12.0, help="Deg error before turning")
+    ap.add_argument("--deadzone", type=float, default=10.0, help="Deg error before turning")
     ap.add_argument("--slice", type=int, default=200, help="Max mouse counts per tick (smoothness)")
     ap.add_argument(
         "--cpd", type=float, default=0.0, help="Counts per degree (0 = from sensitivity)"
     )
     ap.add_argument(
-        "--stuck-secs", type=float, default=1.0, help="No motion this long -> jump/skip"
-    )
-    ap.add_argument(
-        "--obstacle-clear", type=float, default=12.0, help="Radar-open ahead -> jumpable"
-    )
-    ap.add_argument("--max-jumps", type=int, default=2, help="Jumps before skipping a node")
-    ap.add_argument(
-        "--node-stick",
-        type=float,
-        default=0.35,
-        help="How strongly to head straight at the node vs deflect to open (higher = straighter)",
+        "--stuck-secs", type=float, default=1.0, help="No motion this long -> sweep past"
     )
     ap.add_argument(
         "--skip-after", type=float, default=2.5, help="Seconds truly stuck before giving up a node"
@@ -263,8 +251,6 @@ def main():
             state = "walk"
             if target is not None:
                 node_bearing = angle_between(pos, target.pos())
-                gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-                clrs = radar_clearances(gray, bx, by, N_RAYS, MAX_R, 5, 45)
                 stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
                 if not stalled:
                     stall_start = now
@@ -272,24 +258,17 @@ def main():
                 if motion_deg is None:
                     state = "spinup"  # walk to establish facing
                 elif stalled:
-                    # Stuck on an object the radar can't see. Most dust2 objects
-                    # are NOT climbable, so go AROUND: sweep-turn (toward the node
-                    # side) while pushing forward until the dot moves again.
+                    # Bumped something off the path -> sweep-turn past it. With a
+                    # dense path this is rare; if it can't clear, drop the node.
                     mouse.move_relative(sweep_dir * args.slice, 0)
                     state = "around"
                     if now - stall_start > args.skip_after:
-                        ridx += 1  # couldn't get around -> drop node, try other way
+                        ridx += 1
                         stall_start = now
                         sweep_dir = -sweep_dir
                 else:
-                    _, sweep_dir = head_to_node(
-                        clrs,
-                        node_bearing,
-                        motion_deg,
-                        args.node_stick,
-                        args.deadzone,
-                        args.slice,
-                        cpd,
+                    sweep_dir = head_to_node(
+                        node_bearing, motion_deg, args.deadzone, args.slice, cpd
                     )
                     state = "steer"
 
