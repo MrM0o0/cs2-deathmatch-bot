@@ -38,7 +38,7 @@ sys.path.insert(0, PROJECT_ROOT)
 
 from src.capture.screen import ScreenCapture
 from src.input import keyboard, mouse
-from src.movement.occupancy import best_direction, radar_clearances
+from src.movement.occupancy import best_direction, clearance_at, radar_clearances
 from src.utils.math_helpers import distance, normalize_angle
 from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
@@ -62,6 +62,18 @@ def key_vk(name: str) -> int:
 
 def held(vk):
     return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+def steer_toward_open(clrs, motion_deg, extra, deadzone, slice_, cpd):
+    """Turn the view toward the most open + unexplored direction. Returns
+    (chosen_deg, state, sweep_dir)."""
+    ch = best_direction(clrs, motion_deg, extra=extra)
+    err = normalize_angle(ch - motion_deg)
+    sweep_dir = 1 if err >= 0 else -1
+    if abs(err) > deadzone:
+        mouse.move_relative(int(max(-slice_, min(slice_, err * cpd))), 0)
+        return ch, "steer", sweep_dir
+    return ch, "walk", sweep_dir
 
 
 def load_reader():
@@ -111,6 +123,13 @@ def main():
     ap.add_argument(
         "--novelty", type=float, default=4.0, help="Pull toward unexplored areas (anti-circling)"
     )
+    ap.add_argument(
+        "--obstacle-clear",
+        type=float,
+        default=12.0,
+        help="If stalled but radar is open >= this ahead, it's a prop -> jump",
+    )
+    ap.add_argument("--max-jumps", type=int, default=2, help="Jumps to try before turning away")
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
     args = ap.parse_args()
 
@@ -153,6 +172,8 @@ def main():
     motion_deg = None
     last_move_t = 0.0
     sweep_dir = 1
+    jump_count = 0
+    last_jump_t = 0.0
     last_dump = 0.0
     status_t = 0.0
     start = time.perf_counter()
@@ -227,20 +248,33 @@ def main():
 
             press("w")
             chosen = None
-            if motion_deg is None or now - last_move_t > args.stuck_secs:
-                # no reliable facing (just started / wedged) -> blind sweep till moving
-                mouse.move_relative(sweep_dir * args.slice, 0)
+            stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
+            if motion_deg is None:
+                # no facing yet (just started / wedged from frame 1) -> blind sweep
+                if now - last_move_t > args.stuck_secs:
+                    mouse.move_relative(sweep_dir * args.slice, 0)
                 state = "sweep"
-            else:
-                chosen = best_direction(clrs, motion_deg, extra=extra)
-                err = normalize_angle(chosen - motion_deg)
-                if abs(err) > args.deadzone:
-                    tc = int(max(-args.slice, min(args.slice, err * cpd)))
-                    mouse.move_relative(tc, 0)
-                    state = "steer"
+            elif stalled:
+                # Not moving though walking. Radar can't see props/boxes -- so if
+                # the radar says OPEN ahead, it's a physical prop: JUMP it. If the
+                # radar says wall, or jumps didn't free us, turn toward open.
+                fwd = clearance_at(clrs, motion_deg)
+                can_jump = jump_count < args.max_jumps and now - last_jump_t > 0.45
+                if fwd >= args.obstacle_clear and can_jump:
+                    keyboard.key_press("space", hold_ms=40)
+                    last_jump_t = now
+                    jump_count += 1
+                    state = "jump"
                 else:
-                    state = "walk"
-                sweep_dir = 1 if err >= 0 else -1  # remember which way open was
+                    chosen, _, sweep_dir = steer_toward_open(
+                        clrs, motion_deg, extra, args.deadzone, args.slice, cpd
+                    )
+                    state = "unstick"
+            else:
+                jump_count = 0  # moving fine
+                chosen, state, sweep_dir = steer_toward_open(
+                    clrs, motion_deg, extra, args.deadzone, args.slice, cpd
+                )
 
             if now - last_dump >= 0.7:
                 stamp = f"{now - start:06.1f}".replace(".", "_")
