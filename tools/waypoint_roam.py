@@ -172,6 +172,7 @@ def main():
 
     active = False
     idx = 0
+    direction = 1  # trace the trail forward, then ping-pong back (no cross-map jump)
     need_snap = True  # snap to nearest trail point on (re)start / after drifting off
     hist = deque(maxlen=40)  # ~1.3s of positions for slow-dot motion estimate
     motion_deg = None
@@ -237,13 +238,19 @@ def main():
                 need_snap = False
             cur = graph.waypoints[order[idx]]
             d_cur = distance(pos, cur.pos())
-            if d_cur < args.reach:
-                idx = (idx + 1) % len(order)  # reached this point -> next on the trail
+            if d_cur < args.reach:  # reached -> next point; bounce at the trail ends
+                idx += direction
+                if idx >= len(order):
+                    idx, direction = len(order) - 2, -1
+                elif idx < 0:
+                    idx, direction = 1, 1
             elif d_cur > args.resnap:
                 idx = nearest_idx(pos)  # drifted off -> rejoin nearest trail point
             target = graph.waypoints[order[idx]]
-            # Aim a couple points further ALONG the trail so corners start early.
-            steer_target = graph.waypoints[order[(idx + args.lookahead) % len(order)]]
+            # Aim a couple points further ALONG the trail (in travel direction) so
+            # corners start early.
+            si = max(0, min(len(order) - 1, idx + direction * args.lookahead))
+            steer_target = graph.waypoints[order[si]]
             press("w")
             state = "walk"
             if target is not None:
@@ -260,7 +267,7 @@ def main():
                     mouse.move_relative(sweep_dir * args.slice, 0)
                     state = "around"
                     if now - stall_start > args.skip_after:
-                        idx = (idx + 1) % len(order)  # can't pass -> skip ahead on trail
+                        idx = max(0, min(len(order) - 1, idx + direction))  # skip ahead on trail
                         stall_start = now
                         sweep_dir = -sweep_dir
                 else:
