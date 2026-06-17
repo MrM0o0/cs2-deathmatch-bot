@@ -125,7 +125,7 @@ def main():
     ap = argparse.ArgumentParser(description="Waypoint roam (follow a map's routes)")
     ap.add_argument("--map", default="dust2", help="Map name (config/maps/<map>.json)")
     ap.add_argument("--run-key", default="l", help="HOLD this to roam")
-    ap.add_argument("--reach", type=float, default=12.0, help="Px to a node to count as reached")
+    ap.add_argument("--reach", type=float, default=9.0, help="Px to a node to count as reached")
     ap.add_argument(
         "--min-travel", type=float, default=70.0, help="Min px a new destination must be"
     )
