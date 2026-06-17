@@ -261,7 +261,7 @@ def main():
                 fwd = clearance_at(clrs, motion_deg)
                 can_jump = jump_count < args.max_jumps and now - last_jump_t > 0.45
                 if fwd >= args.obstacle_clear and can_jump:
-                    keyboard.key_press("space", hold_ms=40)
+                    mouse.jump()  # scroll-down = the user's jump bind (space isn't bound)
                     last_jump_t = now
                     jump_count += 1
                     state = "jump"

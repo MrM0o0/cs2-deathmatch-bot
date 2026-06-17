@@ -15,6 +15,12 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_WHEEL = 0x0800
+MOUSEEVENTF_XDOWN = 0x0080
+MOUSEEVENTF_XUP = 0x0100
+XBUTTON1 = 0x0001  # "mouse4"
+XBUTTON2 = 0x0002  # "mouse5"
+WHEEL_DELTA = 120
 
 INPUT_MOUSE = 0
 
@@ -22,6 +28,7 @@ user32 = ctypes.windll.user32
 
 # ── Button state tracking ────────────────────────────────────────────────────
 _button_state = {"left": False, "right": False, "middle": False}
+_x_state = {XBUTTON1: False, XBUTTON2: False}
 
 _DOWN_FLAGS = {
     "left": MOUSEEVENTF_LEFTDOWN,
@@ -110,8 +117,48 @@ def ensure_released(button: str = "left") -> None:
         mouse_up(button)
 
 
+def scroll(notches: int = -1) -> None:
+    """Scroll the wheel. Negative = down (toward you). One notch = WHEEL_DELTA.
+    `notches` is interpreted as a signed 16-bit value for mouse_event."""
+    data = int(notches) * WHEEL_DELTA
+    if data < 0:
+        data += 0x100000000  # mouse_event wants unsigned for a negative delta
+    user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, data, 0)
+
+
+def jump() -> None:
+    """Jump. The user binds +jump to mwheeldown, so one scroll-down = one jump."""
+    scroll(-1)
+
+
+def xbutton_down(which: int = XBUTTON2) -> None:
+    _x_state[which] = True
+    user32.mouse_event(MOUSEEVENTF_XDOWN, 0, 0, which, 0)
+
+
+def xbutton_up(which: int = XBUTTON2) -> None:
+    user32.mouse_event(MOUSEEVENTF_XUP, 0, 0, which, 0)
+    _x_state[which] = False
+
+
+def crouch_down() -> None:
+    """Hold crouch. The user binds +duck to mouse5 (XBUTTON2)."""
+    xbutton_down(XBUTTON2)
+
+
+def crouch_up() -> None:
+    xbutton_up(XBUTTON2)
+
+
+def is_crouching() -> bool:
+    return _x_state.get(XBUTTON2, False)
+
+
 def release_all_buttons() -> None:
-    """Force release all mouse buttons. Emergency safety."""
+    """Force release all mouse buttons (incl. crouch/x-buttons). Emergency safety."""
     for button in ("left", "right", "middle"):
         if _button_state.get(button, False):
             mouse_up(button)
+    for xb, down in list(_x_state.items()):
+        if down:
+            xbutton_up(xb)

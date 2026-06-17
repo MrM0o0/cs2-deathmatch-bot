@@ -198,6 +198,8 @@ def main():
     jump_count = 0
     last_jump_t = 0.0
     stall_start = 0.0
+    crouching = False
+    crouch_until = 0.0
     sweep_dir = 1
     last_dump = 0.0
     status_t = 0.0
@@ -267,6 +269,9 @@ def main():
                 stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
                 if not stalled:
                     stall_start = now
+                if crouching and (not stalled or now >= crouch_until):
+                    mouse.crouch_up()  # end the crouch once moving again / time up
+                    crouching = False
 
                 if motion_deg is None:
                     state = "spinup"  # walk to establish facing
@@ -277,10 +282,19 @@ def main():
                         and jump_count < args.max_jumps
                         and now - last_jump_t > 0.45
                     ):
-                        keyboard.key_press("space", hold_ms=40)  # radar open -> hop a prop
+                        mouse.jump()  # scroll-down = the user's jump bind
                         last_jump_t = now
                         jump_count += 1
                         state = "jump"
+                    elif (
+                        jump_count >= args.max_jumps
+                        and not crouching
+                        and now - stall_start < args.skip_after
+                    ):
+                        mouse.crouch_down()  # mouse5 = the user's crouch bind (low gap?)
+                        crouching = True
+                        crouch_until = now + 0.6
+                        state = "crouch"
                     elif now - stall_start > args.skip_after:
                         ridx += 1  # genuinely can't reach it -> give up on this node
                         jump_count = 0
