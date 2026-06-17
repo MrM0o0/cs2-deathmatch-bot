@@ -78,24 +78,33 @@ def read_stable_heading(reader, cap, n=8):
     return math.degrees(math.atan2(sum(sins) / len(sins), sum(coss) / len(coss)))
 
 
-def calibrate(reader, cap, counts):
-    """Emit a known turn and learn (invert_turn, turn_gain) from the cone heading."""
-    h0 = read_stable_heading(reader, cap)
-    if h0 is None:
-        return None
-    # Move in small steps so the radar tracks the turn smoothly.
-    step = 25
-    moved = 0
-    for _ in range(max(1, counts // step)):
-        mouse.move_relative(step, 0)
-        moved += step
-        time.sleep(0.02)
-    time.sleep(0.15)  # let the radar settle
-    h1 = read_stable_heading(reader, cap)
-    if h1 is None:
-        return None
-    print(f"[steer] calib: heading {h0:.0f} -> {h1:.0f} after +{moved} counts")
-    return compute_turn_calibration(h0, h1, moved)
+def calibrate(reader, cap, start_counts):
+    """Learn (invert_turn, turn_gain) by emitting a known turn and reading the
+    cone heading before/after. Escalates the turn size until the heading moves
+    enough to measure (a small turn can be below the noise floor)."""
+    counts = max(50, start_counts)
+    for attempt in range(4):
+        h0 = read_stable_heading(reader, cap)
+        if h0 is None:
+            return None
+        # Move in small steps so the radar tracks the turn smoothly.
+        step = 25
+        moved = 0
+        for _ in range(max(1, counts // step)):
+            mouse.move_relative(step, 0)
+            moved += step
+            time.sleep(0.02)
+        time.sleep(0.2)  # let the radar settle
+        h1 = read_stable_heading(reader, cap)
+        if h1 is None:
+            return None
+        delta = normalize_angle(h1 - h0)
+        print(f"[steer] calib {attempt + 1}: {h0:.0f}->{h1:.0f} (d={delta:.0f}deg) +{moved}c")
+        cal = compute_turn_calibration(h0, h1, moved)
+        if cal is not None:
+            return cal
+        counts *= 2  # heading barely moved -> turn harder and retry
+    return None
 
 
 def main():
@@ -115,7 +124,9 @@ def main():
         "--gain", type=float, default=0.0, help="Override counts/deg (0 = auto-calibrate)"
     )
     ap.add_argument("--invert", action="store_true", help="Force-invert turn sign (skip auto)")
-    ap.add_argument("--cal-counts", type=int, default=250, help="Counts for the calibration turn")
+    ap.add_argument(
+        "--cal-counts", type=int, default=600, help="Starting counts for the calibration turn"
+    )
     ap.add_argument("--delay", type=int, default=6, help="Countdown to alt-tab into CS2")
     ap.add_argument("--max-seconds", type=float, default=120.0, help="Auto-stop after N seconds")
     args = ap.parse_args()
@@ -140,8 +151,9 @@ def main():
     else:
         cal = calibrate(reader, cap, args.cal_counts)
         if cal is None:
-            print("[steer] CALIBRATION FAILED (heading didn't move enough). Is the radar")
-            print("        fixed (cl_radar_rotate 0) and the cone visible? Try --cal-counts 400.")
+            print("[steer] CALIBRATION FAILED even at a big turn. Did the view actually")
+            print("        rotate? Is there a directional cone/arrow on the dot (not just a")
+            print("        plain dot)? If unsure, re-run tools/validate_signals.py to inspect.")
             cap.stop()
             logger.close()
             return
