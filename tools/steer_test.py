@@ -28,7 +28,6 @@ import os
 import sys
 import time
 
-import numpy as np
 import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -135,8 +134,6 @@ def main():
     targets = [float(b) for b in args.bearings.split(",")]
     enable_high_resolution_timer()
     reader, cfg = load_reader()
-    mm = cfg["minimap"]
-    mx, my, msz = mm["x"], mm["y"], mm["size"]
     cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=60)
     cap.start()
     logger = SessionLogger(os.path.join(PROJECT_ROOT, "logs"), enabled=True)
@@ -170,7 +167,11 @@ def main():
     idx = 0
     on_since = None
     status_t = 0.0
-    last_mm = None  # last minimap region, to detect duplicate (stale) captures
+    # Pace the control loop at 30 Hz. The capture runs ~60fps and the cone read
+    # tracks a turn fine up to ~130 deg/s (proven in validate); the original
+    # jiggle was turning 70 counts/tick at full loop speed = a ~4000 counts/s
+    # spin, far too fast to track. Paced + gentle turns keeps it trackable.
+    period = 1.0 / 30.0
     start = time.perf_counter()
     try:
         while True:
@@ -185,16 +186,6 @@ def main():
             if frame is None:
                 time.sleep(0.002)
                 continue
-            # Only steer on a FRESH frame. The loop runs faster than the capture
-            # refreshes; acting on a duplicate frame turns blind between sensor
-            # updates and over-rotates past the target (the jiggle). Skip dupes
-            # so each turn is sensed before the next.
-            region = frame[my : my + msz, mx : mx + msz]
-            if last_mm is not None and np.array_equal(region, last_mm):
-                time.sleep(0.002)
-                continue
-            last_mm = region.copy()
-
             _, heading = reader.read(frame)
             target = targets[idx]
             err = normalize_angle(target - heading)
@@ -231,6 +222,10 @@ def main():
                     flush=True,
                 )
                 status_t = now
+
+            elapsed = time.perf_counter() - now
+            if elapsed < period:
+                time.sleep(period - elapsed)
     finally:
         if args.walk:
             keyboard.key_up("w")
