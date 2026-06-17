@@ -115,7 +115,13 @@ def main():
         help="Comma list of target bearings (deg, atan2: 0=E,90=S,-90=N) to cycle",
     )
     ap.add_argument("--walk", action="store_true", help="Hold W while steering")
-    ap.add_argument("--tolerance", type=float, default=8.0, help="Deg within target = on-bearing")
+    ap.add_argument("--tolerance", type=float, default=10.0, help="Deg within target = on-bearing")
+    ap.add_argument(
+        "--smooth",
+        type=float,
+        default=0.35,
+        help="Heading low-pass (circular EMA, 0..1; lower = smoother/steadier)",
+    )
     ap.add_argument("--hold", type=float, default=0.6, help="Seconds on-bearing before next target")
     ap.add_argument(
         "--max-turn", type=int, default=25, help="Max mouse counts per fresh frame (smoothness)"
@@ -167,6 +173,7 @@ def main():
     idx = 0
     on_since = None
     status_t = 0.0
+    sm_head = None  # circular-EMA-smoothed heading (damps the near-target bistable flicker)
     # Pace the control loop at 30 Hz. The capture runs ~60fps and the cone read
     # tracks a turn fine up to ~130 deg/s (proven in validate); the original
     # jiggle was turning 70 counts/tick at full loop speed = a ~4000 counts/s
@@ -187,8 +194,21 @@ def main():
                 time.sleep(0.002)
                 continue
             _, heading = reader.read(frame)
+            # Circular EMA: average heading on the unit circle so it wraps
+            # correctly and the near-target bistable flicker damps to the middle.
+            if sm_head is None:
+                sm_head = heading
+            else:
+                a = args.smooth
+                hr, sr = math.radians(heading), math.radians(sm_head)
+                sm_head = math.degrees(
+                    math.atan2(
+                        a * math.sin(hr) + (1 - a) * math.sin(sr),
+                        a * math.cos(hr) + (1 - a) * math.cos(sr),
+                    )
+                )
             target = targets[idx]
-            err = normalize_angle(target - heading)
+            err = normalize_angle(target - sm_head)
 
             if abs(err) <= args.tolerance:
                 if on_since is None:
@@ -208,6 +228,7 @@ def main():
             logger.log_tick(
                 t=round(now - start, 3),
                 heading=round(heading, 1),
+                sm=round(sm_head, 1),
                 target=round(target, 1),
                 err=round(err, 1),
                 turn=turn,
