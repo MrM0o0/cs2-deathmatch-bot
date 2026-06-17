@@ -11,11 +11,12 @@ POSITION. It never reads the fragile cone heading.
 That's enough to wander a map convincingly. Facing-dependent niceties (peeks)
 are a later problem; this is the reliable backbone.
 
-SAFETY -- dead-man switch: the bot only acts WHILE YOU HOLD the run key (Insert).
-Let go and it stops instantly (keys + mouse released). END quits entirely;
+SAFETY -- dead-man switch: the bot only acts WHILE YOU HOLD the run key (default
+L). Let go and it stops instantly (keys + mouse released). END quits entirely;
 --max-seconds auto-stops. You cannot lose control: release the key and it's done.
 
-    python tools/roam.py            # HOLD Insert to roam, release to stop, END to quit
+    python tools/roam.py                 # HOLD L to roam, release to stop, END to quit
+    python tools/roam.py --run-key j     # use a different hold key
 """
 
 import argparse
@@ -38,8 +39,18 @@ from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
 from src.vision.minimap import MinimapReader
 
-VK = {"insert": 0x2D, "end": 0x23, "home": 0x24, "rshift": 0xA1, "rctrl": 0xA3}
+SPECIAL = {"insert": 0x2D, "end": 0x23, "home": 0x24, "rshift": 0xA1, "rctrl": 0xA3}
 END_VK = 0x23
+
+
+def key_vk(name: str) -> int:
+    """Virtual-key code for a run-key: a single letter (e.g. 'l') or a name."""
+    name = name.lower()
+    if name in SPECIAL:
+        return SPECIAL[name]
+    if len(name) == 1 and name.isalpha():
+        return ord(name.upper())
+    raise ValueError(f"unknown run-key: {name!r} (use a single letter or {sorted(SPECIAL)})")
 
 
 def held(vk):
@@ -58,7 +69,9 @@ def load_reader():
 
 def main():
     ap = argparse.ArgumentParser(description="Simple position-based roam (no heading)")
-    ap.add_argument("--run-key", default="insert", choices=sorted(VK), help="HOLD this to roam")
+    ap.add_argument(
+        "--run-key", default="l", help="HOLD this to roam (a letter like l, or insert/rctrl/...)"
+    )
     ap.add_argument("--sample", type=float, default=0.25, help="Seconds between position samples")
     ap.add_argument("--stuck-dist", type=float, default=5.0, help="Min px moved/window or stuck")
     ap.add_argument("--stuck-time", type=float, default=1.2, help="Walk this long before judging")
@@ -70,7 +83,7 @@ def main():
 
     enable_high_resolution_timer()
     reader, cfg = load_reader()
-    run_vk = VK[args.run_key]
+    run_vk = key_vk(args.run_key)
     cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=60)
     cap.start()
     logger = SessionLogger(os.path.join(PROJECT_ROOT, "logs"), enabled=True)
