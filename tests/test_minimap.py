@@ -92,6 +92,18 @@ def test_cone_heading_distinguishes_opposite_directions():
     assert _angle_diff(north, south) >= 120
 
 
+def test_cone_heading_ignores_separate_white_callout():
+    """A nearby white callout (e.g. the 'B' bombsite icon) that is NOT attached
+    to the dot must not drag the heading -- only the dot's own cone counts.
+    This is the real in-game failure that made steer jiggle near B site."""
+    r = MinimapReader(16, 16, 256)
+    frame = _frame_with_cone(120, 120, 0.0)  # cone points east, touching the dot
+    # Separate white blob to the WEST, not touching the dot (a 'B' callout).
+    cv2.circle(frame, (16 + 120 - 13, 16 + 120), 3, (245, 245, 245), -1)
+    _, ang = r.read(frame)
+    assert _angle_diff(ang, 0.0) <= 22, f"callout pulled heading to {ang}"
+
+
 def test_cone_heading_kept_when_no_cone_visible():
     """No clear cone -> keep the last heading rather than emit noise."""
     r = MinimapReader(16, 16, 256)

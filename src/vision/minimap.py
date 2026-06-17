@@ -130,13 +130,17 @@ class MinimapReader:
         return self._last_position, self._last_angle
 
     def _cone_heading(self, hsv: np.ndarray, cx: int, cy: int) -> float | None:
-        """Heading (deg) from the white facing-cone beside the dot.
+        """Heading (deg) from the white facing-cone attached to the dot.
 
-        The cone is near-white (low saturation, high value) so it isolates
-        cleanly from the saturated dot. We take the direction from the dot
-        centre to the cone's pixels, weighted toward the tip (pixels farther
-        out), giving an instant, unambiguous full-360 heading. Returns None if
-        no clear cone is visible (caller keeps the last heading).
+        The cone is near-white (low saturation, high value). Crucially we keep
+        ONLY the white that belongs to the dot's own connected blob -- the dot
+        and its cone are one connected shape, while nearby clutter (bombsite
+        callout icons like "B", bright terrain) are SEPARATE blobs. Averaging all
+        white in the window mixed those in and made the heading jump between
+        them (the jiggle). Taking the dot's component isolates the real cone.
+
+        Direction = the cone pixels' centroid from the dot centre, weighted
+        toward the tip. Returns None if no clear cone (caller keeps last).
 
         Angle convention matches the rest of the nav stack: degrees via
         atan2(dy, dx) in minimap pixels (x right, y down) -- 0 = east, +90 = south.
@@ -152,26 +156,48 @@ class MinimapReader:
         if win.size == 0:
             return None
 
+        dot = cv2.inRange(
+            win,
+            np.array([0, self.sat_min, self.val_min], dtype=np.uint8),
+            np.array([179, 255, 255], dtype=np.uint8),
+        )
         white = cv2.inRange(
             win,
             np.array([0, 0, self.cone_val_min], dtype=np.uint8),
             np.array([179, self.cone_sat_max, 255], dtype=np.uint8),
         )
-        ys, xs = np.where(white > 0)
+        # The marker = dot + cone as one blob. Close 1px anti-alias gaps so the
+        # cone stays connected to the dot, then keep only that connected blob.
+        marker = cv2.bitwise_or(dot, white)
+        marker = cv2.morphologyEx(marker, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+        n_labels, labels = cv2.connectedComponents(marker)
+        sx, sy = cx - x1, cy - y1  # dot centre in window coords
+        if not (0 <= sy < labels.shape[0] and 0 <= sx < labels.shape[1]):
+            return None
+        seed = labels[sy, sx]
+        if seed == 0:  # dot centre fell on a gap -> nearest marker pixel's label
+            mys, mxs = np.where(marker > 0)
+            if len(mxs) == 0:
+                return None
+            i = ((mxs - sx) ** 2 + (mys - sy) ** 2).argmin()
+            seed = labels[mys[i], mxs[i]]
+
+        # Cone = the white pixels of the dot's own blob (exclude the saturated dot).
+        cone = (labels == seed) & (white > 0)
+        ys, xs = np.where(cone)
         if len(xs) < self.min_cone_area:
             return None
 
-        # Positions relative to the dot centre; drop the dot's own halo.
-        rx = xs.astype(np.float64) + x1 - cx
-        ry = ys.astype(np.float64) + y1 - cy
+        rx = xs.astype(np.float64) - sx
+        ry = ys.astype(np.float64) - sy
         rad = np.hypot(rx, ry)
         keep = rad >= self.cone_inner
-        if keep.sum() < self.min_cone_area:
-            return None
-        rx, ry, rad = rx[keep], ry[keep], rad[keep]
-
-        # Weight toward the tip so the direction tracks where the cone points.
+        if keep.sum() >= self.min_cone_area:
+            rx, ry, rad = rx[keep], ry[keep], rad[keep]
         wsum = rad.sum()
+        if wsum <= 0:
+            return None
+        # Weight toward the tip so the direction tracks where the cone points.
         mx = float((rx * rad).sum() / wsum)
         my = float((ry * rad).sum() / wsum)
         return math.degrees(math.atan2(my, mx))
