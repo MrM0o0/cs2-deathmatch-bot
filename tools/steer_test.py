@@ -28,6 +28,7 @@ import os
 import sys
 import time
 
+import numpy as np
 import yaml
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -118,7 +119,7 @@ def main():
     ap.add_argument("--tolerance", type=float, default=8.0, help="Deg within target = on-bearing")
     ap.add_argument("--hold", type=float, default=0.6, help="Seconds on-bearing before next target")
     ap.add_argument(
-        "--max-turn", type=int, default=70, help="Max mouse counts per tick (smoothness)"
+        "--max-turn", type=int, default=25, help="Max mouse counts per fresh frame (smoothness)"
     )
     ap.add_argument(
         "--gain", type=float, default=0.0, help="Override counts/deg (0 = auto-calibrate)"
@@ -134,6 +135,8 @@ def main():
     targets = [float(b) for b in args.bearings.split(",")]
     enable_high_resolution_timer()
     reader, cfg = load_reader()
+    mm = cfg["minimap"]
+    mx, my, msz = mm["x"], mm["y"], mm["size"]
     cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=60)
     cap.start()
     logger = SessionLogger(os.path.join(PROJECT_ROOT, "logs"), enabled=True)
@@ -167,6 +170,7 @@ def main():
     idx = 0
     on_since = None
     status_t = 0.0
+    last_mm = None  # last minimap region, to detect duplicate (stale) captures
     start = time.perf_counter()
     try:
         while True:
@@ -179,8 +183,18 @@ def main():
 
             frame = cap.grab()
             if frame is None:
-                time.sleep(0.003)
+                time.sleep(0.002)
                 continue
+            # Only steer on a FRESH frame. The loop runs faster than the capture
+            # refreshes; acting on a duplicate frame turns blind between sensor
+            # updates and over-rotates past the target (the jiggle). Skip dupes
+            # so each turn is sensed before the next.
+            region = frame[my : my + msz, mx : mx + msz]
+            if last_mm is not None and np.array_equal(region, last_mm):
+                time.sleep(0.002)
+                continue
+            last_mm = region.copy()
+
             _, heading = reader.read(frame)
             target = targets[idx]
             err = normalize_angle(target - heading)
