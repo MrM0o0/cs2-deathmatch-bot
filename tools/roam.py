@@ -1,21 +1,20 @@
-"""Simple, robust roam -- walk the map without getting stuck. NO heading.
+"""Simple, robust roam -- walk the map and never stay stuck. NO heading.
 
 Uses only the rock-solid signal (minimap dot POSITION), never the fragile cone
-heading. Turns are OPEN-LOOP and sized by ANGLE: counts = degrees / (sens*m_yaw)
-(~53 counts/deg here), so a "turn 120 deg" is a real, visible swing -- not the
-~7 deg baby-step the old fixed counts produced.
+heading. Turns are OPEN-LOOP, sized by ANGLE (counts = deg / (sens*m_yaw),
+~53 counts/deg here) so they're real swings, not baby steps.
 
-  - Walk forward.
-  - Every few seconds, wander: small random turn so it doesn't just go straight.
-  - Dot stalled (stuck on a wall/box)? jump + big random turn until it moves.
+Behaviour:
+  - WALK forward; occasionally a small wander turn so it isn't dead straight.
+  - When the dot stops advancing (wall/box) -> ESCAPE: jump, then turn steadily
+    while pushing forward UNTIL it's moving again. If a full sweep finds nothing,
+    BACK UP briefly and sweep the other way. So it never grinds in place.
 
-SAFETY -- dead-man switch: the bot only acts WHILE YOU HOLD the run key (default
-L). Let go and it stops instantly (keys + mouse released). END quits entirely;
---max-seconds auto-stops. You cannot lose control: release the key and it's done.
+SAFETY -- dead-man switch: acts only WHILE YOU HOLD the run key (default L).
+Release = instant stop (keys + mouse released). END quits; --max-seconds backstops.
 
     python tools/roam.py                 # HOLD L to roam, release to stop, END to quit
-    python tools/roam.py --run-key j     # different hold key
-    python tools/roam.py --cpd 40        # override counts-per-degree (eye-calibrate turns)
+    python tools/roam.py --cpd 40        # eye-calibrate turn size if needed
 """
 
 import argparse
@@ -43,13 +42,12 @@ END_VK = 0x23
 
 
 def key_vk(name: str) -> int:
-    """Virtual-key code for a run-key: a single letter (e.g. 'l') or a name."""
     name = name.lower()
     if name in SPECIAL:
         return SPECIAL[name]
     if len(name) == 1 and name.isalpha():
         return ord(name.upper())
-    raise ValueError(f"unknown run-key: {name!r} (use a single letter or {sorted(SPECIAL)})")
+    raise ValueError(f"unknown run-key: {name!r}")
 
 
 def held(vk):
@@ -67,19 +65,30 @@ def load_reader():
 
 
 def main():
-    ap = argparse.ArgumentParser(description="Simple position-based roam (no heading)")
+    ap = argparse.ArgumentParser(description="Position-based roam that never stays stuck")
     ap.add_argument("--run-key", default="l", help="HOLD this to roam (a letter, or insert/rctrl)")
-    ap.add_argument("--sample", type=float, default=0.25, help="Seconds between position samples")
-    ap.add_argument("--stuck-dist", type=float, default=5.0, help="Min px moved/window or stuck")
-    ap.add_argument("--stuck-time", type=float, default=1.2, help="Walk this long before judging")
-    ap.add_argument("--wander-secs", type=float, default=4.0, help="Seconds between wander turns")
+    ap.add_argument("--stuck-secs", type=float, default=0.8, help="No-progress time -> escape")
     ap.add_argument(
-        "--turn-slice", type=int, default=300, help="Max mouse counts per tick in a turn"
+        "--stuck-dist", type=float, default=6.0, help="Px/window below this = no progress"
+    )
+    ap.add_argument(
+        "--clear-dist", type=float, default=9.0, help="Recent px moved that means 'freed'"
+    )
+    ap.add_argument(
+        "--escape-slice", type=int, default=200, help="Mouse counts/tick while escaping"
+    )
+    ap.add_argument(
+        "--escape-timeout", type=float, default=3.5, help="Sweep this long then back up"
+    )
+    ap.add_argument(
+        "--backup-secs", type=float, default=0.5, help="How long to walk back when boxed in"
+    )
+    ap.add_argument(
+        "--wander-secs", type=float, default=6.0, help="Seconds between gentle wander turns"
     )
     ap.add_argument(
         "--cpd", type=float, default=0.0, help="Counts per degree (0 = from sensitivity)"
     )
-    ap.add_argument("--no-jump", action="store_true", help="Don't jump when stuck")
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
     args = ap.parse_args()
 
@@ -91,28 +100,47 @@ def main():
     cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=60)
     cap.start()
     logger = SessionLogger(os.path.join(PROJECT_ROOT, "logs"), enabled=True)
-    print(f"[roam] {cpd:.1f} counts/deg (360 = {cpd * 360:.0f} counts).")
-    print(f"[roam] ready. HOLD {args.run_key.upper()} to roam, release to STOP, END to quit.")
+    print(
+        f"[roam] {cpd:.1f} counts/deg. HOLD {args.run_key.upper()} to roam, release=STOP, END=quit."
+    )
+
+    keys_down = set()
+
+    def press(k):
+        if k not in keys_down:
+            keyboard.key_down(k)
+            keys_down.add(k)
+
+    def release(k):
+        if k in keys_down:
+            keyboard.key_up(k)
+            keys_down.discard(k)
 
     def stop_all():
-        for k in ("w", "a", "d"):
-            keyboard.key_up(k)
+        for k in list(keys_down):
+            release(k)
         mouse.release_all_buttons()
 
-    walking = False
-    turn_remaining = 0  # signed mouse counts still to emit for the current turn
-    phase_start = 0.0  # when the current straight-walk phase began
-    samples = deque(maxlen=8)  # (t, pos)
+    def moved_since(t_ago, now, samples):
+        """Px the dot moved over roughly the last t_ago seconds."""
+        if len(samples) < 2:
+            return 999.0
+        cutoff = now - t_ago
+        old = next((p for (t, p) in samples if t >= cutoff), samples[0][1])
+        return distance(old, samples[-1][1])
+
+    active = False
+    state = "walk"
+    samples = deque(maxlen=12)  # (t, pos) ~3s at 0.25s
     last_sample = 0.0
+    wander_left = 0  # signed counts remaining for a wander turn
+    phase_start = 0.0  # when current straight-walk phase began
+    escape_start = 0.0
+    escape_dir = 1
+    backup_until = 0.0
     period = 1.0 / 30.0
     status_t = 0.0
-    state = "walk"
     start = time.perf_counter()
-
-    def queue_turn(deg_lo, deg_hi):
-        nonlocal turn_remaining
-        deg = random.uniform(deg_lo, deg_hi) * random.choice((-1, 1))
-        turn_remaining = int(deg * cpd)
 
     try:
         while True:
@@ -123,72 +151,83 @@ def main():
                 print("\n[roam] max-seconds reached.")
                 break
 
-            # --- dead-man switch: only act while the run key is held ---
+            # dead-man: only act while the run key is held
             if not held(run_vk):
-                if walking:
+                if active:
                     stop_all()
-                    walking = False
-                    turn_remaining = 0
+                    active = False
                     samples.clear()
                 time.sleep(0.02)
                 if now - status_t >= 0.5:
-                    print("\r[roam] IDLE (hold key to roam)            ", end="", flush=True)
+                    print("\r[roam] IDLE (hold key to roam)        ", end="", flush=True)
                     status_t = now
                 continue
 
-            if not walking:  # just (re)engaged
-                keyboard.key_down("w")
-                walking = True
+            if not active:
+                active = True
+                state = "walk"
                 phase_start = now
+                wander_left = 0
                 samples.clear()
-                turn_remaining = 0
+                press("w")
 
             frame = cap.grab()
             if frame is None:
                 time.sleep(0.002)
                 continue
             pos, _ = reader.read(frame)
-            if now - last_sample >= args.sample:
+            if now - last_sample >= 0.25:
                 samples.append((now, pos))
                 last_sample = now
 
-            if turn_remaining != 0:
-                # Emit the next slice of the in-progress turn (open-loop).
-                step = max(-args.turn_slice, min(args.turn_slice, turn_remaining))
-                mouse.move_relative(step, 0)
-                turn_remaining -= step
-                state = "turn"
-                if turn_remaining == 0:  # turn finished -> fresh straight-walk phase
-                    phase_start = now
-                    samples.clear()
-                    last_sample = now
-            else:
-                moved = distance(samples[0][1], samples[-1][1]) if len(samples) >= 2 else 999.0
-                window = samples[-1][0] - samples[0][0] if len(samples) >= 2 else 0.0
-                if (
-                    now - phase_start > args.stuck_time
-                    and window >= args.stuck_time
-                    and moved < args.stuck_dist
-                ):
-                    state = "stuck"
-                    if not args.no_jump:
-                        keyboard.key_press("space", hold_ms=40)
-                    queue_turn(110, 160)  # big turn to escape
-                elif now - phase_start > args.wander_secs:
-                    state = "wander"
-                    queue_turn(20, 50)  # gentle course change
-                    phase_start = now
+            if state == "walk":
+                release("s")
+                press("w")
+                if wander_left != 0:  # finishing a gentle wander turn
+                    step = max(-args.escape_slice, min(args.escape_slice, wander_left))
+                    mouse.move_relative(step, 0)
+                    wander_left -= step
                 else:
-                    state = "walk"
+                    win = samples[-1][0] - samples[0][0] if len(samples) >= 2 else 0.0
+                    progress = moved_since(args.stuck_secs, now, samples)
+                    if (
+                        now - phase_start > args.stuck_secs
+                        and win >= args.stuck_secs
+                        and progress < args.stuck_dist
+                    ):
+                        state = "escape"  # wall -> start sweeping
+                        escape_start = now
+                        escape_dir = random.choice((-1, 1))
+                        keyboard.key_press("space", hold_ms=40)
+                    elif now - phase_start > args.wander_secs:
+                        deg = random.uniform(15, 35) * random.choice((-1, 1))
+                        wander_left = int(deg * cpd)
+                        phase_start = now
 
-            logger.log_tick(
-                t=round(now - start, 3), x=pos[0], y=pos[1], state=state, tr=turn_remaining
-            )
+            elif state == "escape":
+                press("w")
+                mouse.move_relative(escape_dir * args.escape_slice, 0)  # sweep
+                if moved_since(0.6, now, samples) > args.clear_dist:
+                    state = "walk"  # moving again -> resume
+                    phase_start = now
+                elif now - escape_start > args.escape_timeout:
+                    state = "backup"  # boxed in -> reverse out
+                    backup_until = now + args.backup_secs
+                    release("w")
+                    press("s")
+
+            elif state == "backup":
+                if now >= backup_until:
+                    release("s")
+                    press("w")
+                    state = "escape"
+                    escape_start = now
+                    escape_dir = -escape_dir  # try the other way
+
+            logger.log_tick(t=round(now - start, 3), x=pos[0], y=pos[1], state=state)
             if now - status_t >= 0.4:
                 print(
-                    f"\r[roam] {state:6s} | pos {pos[0]:3d},{pos[1]:3d} | t {turn_remaining:5d}  ",
-                    end="",
-                    flush=True,
+                    f"\r[roam] {state:6s} | pos {pos[0]:3d},{pos[1]:3d}        ", end="", flush=True
                 )
                 status_t = now
 
