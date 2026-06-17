@@ -41,7 +41,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.capture.screen import ScreenCapture
 from src.input import keyboard, mouse
 from src.movement.navigator import WaypointGraph
-from src.movement.occupancy import clearance_at, radar_clearances
+from src.movement.occupancy import best_direction, clearance_at, radar_clearances
 from src.utils.math_helpers import angle_between, distance, normalize_angle
 from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
@@ -64,6 +64,18 @@ def key_vk(name):
 
 def held(vk):
     return bool(ctypes.windll.user32.GetAsyncKeyState(vk) & 0x8000)
+
+
+def head_to_node(clrs, node_bearing, motion_deg, node_stick, deadzone, slice_, cpd):
+    """Steer toward the node, but let the radar deflect to the OPEN direction
+    nearest the node so it rounds walls/corners instead of bee-lining into them.
+    Returns (chosen_deg, sweep_dir)."""
+    ch = best_direction(clrs, node_bearing, node_stick)
+    err = normalize_angle(ch - motion_deg)
+    sweep_dir = 1 if err >= 0 else -1
+    if abs(err) > deadzone:
+        mouse.move_relative(int(max(-slice_, min(slice_, err * cpd))), 0)
+    return ch, sweep_dir
 
 
 def load_cfg():
@@ -131,6 +143,15 @@ def main():
         "--obstacle-clear", type=float, default=12.0, help="Radar-open ahead -> jumpable"
     )
     ap.add_argument("--max-jumps", type=int, default=2, help="Jumps before skipping a node")
+    ap.add_argument(
+        "--node-stick",
+        type=float,
+        default=0.35,
+        help="How strongly to head straight at the node vs deflect to open (higher = straighter)",
+    )
+    ap.add_argument(
+        "--skip-after", type=float, default=2.5, help="Seconds truly stuck before giving up a node"
+    )
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
     args = ap.parse_args()
 
@@ -176,6 +197,7 @@ def main():
     last_move_t = 0.0
     jump_count = 0
     last_jump_t = 0.0
+    stall_start = 0.0
     sweep_dir = 1
     last_dump = 0.0
     status_t = 0.0
@@ -240,33 +262,53 @@ def main():
             state = "walk"
             if target is not None:
                 node_bearing = angle_between(pos, target.pos())
+                gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
+                clrs = radar_clearances(gray, bx, by, N_RAYS, MAX_R, 5, 45)
                 stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
+                if not stalled:
+                    stall_start = now
+
                 if motion_deg is None:
                     state = "spinup"  # walk to establish facing
                 elif stalled:
-                    gray = cv2.cvtColor(region, cv2.COLOR_BGR2GRAY)
-                    clrs = radar_clearances(gray, bx, by, N_RAYS, MAX_R, 5, 45)
                     fwd = clearance_at(clrs, node_bearing)
                     if (
                         fwd >= args.obstacle_clear
                         and jump_count < args.max_jumps
                         and now - last_jump_t > 0.45
                     ):
-                        keyboard.key_press("space", hold_ms=40)
+                        keyboard.key_press("space", hold_ms=40)  # radar open -> hop a prop
                         last_jump_t = now
                         jump_count += 1
                         state = "jump"
-                    else:  # can't reach this node -> skip to the next
-                        ridx += 1
-                        mouse.move_relative(sweep_dir * args.slice, 0)
+                    elif now - stall_start > args.skip_after:
+                        ridx += 1  # genuinely can't reach it -> give up on this node
+                        jump_count = 0
+                        stall_start = now
                         state = "skip"
+                    else:
+                        _, sweep_dir = head_to_node(
+                            clrs,
+                            node_bearing,
+                            motion_deg,
+                            args.node_stick,
+                            args.deadzone,
+                            args.slice,
+                            cpd,
+                        )
+                        state = "unstick"
                 else:
                     jump_count = 0
-                    err = normalize_angle(node_bearing - motion_deg)
-                    sweep_dir = 1 if err >= 0 else -1
-                    if abs(err) > args.deadzone:
-                        mouse.move_relative(int(max(-args.slice, min(args.slice, err * cpd))), 0)
-                        state = "steer"
+                    _, sweep_dir = head_to_node(
+                        clrs,
+                        node_bearing,
+                        motion_deg,
+                        args.node_stick,
+                        args.deadzone,
+                        args.slice,
+                        cpd,
+                    )
+                    state = "steer"
 
             if now - last_dump >= 0.7:
                 stamp = f"{now - start:06.1f}".replace(".", "_")
