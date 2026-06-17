@@ -192,7 +192,7 @@ def main():
 
     active = False
     route, ridx = [], 0
-    hist = deque(maxlen=20)
+    hist = deque(maxlen=40)  # ~1.3s of positions for slow-dot motion estimate
     motion_deg = None
     last_move_t = 0.0
     stall_start = 0.0
@@ -240,9 +240,12 @@ def main():
             region = frame[my : my + msz, mx : mx + msz]
 
             # motion heading from recent dot displacement
+            # The radar dot moves slowly (~5 px/sec at whole-map zoom), so judge
+            # motion over a ~1s window with a small threshold -- otherwise normal
+            # walking reads as "stalled" and the bot sweep-turns forever.
             hist.append((now, pos))
-            old = next((p for (t, p) in hist if t >= now - 0.5), hist[0][1])
-            if distance(old, pos) >= 4.0:
+            old = next((p for (t, p) in hist if t >= now - 1.0), hist[0][1])
+            if distance(old, pos) >= 3.0:
                 motion_deg = angle_between(old, pos)
                 last_move_t = now
 
