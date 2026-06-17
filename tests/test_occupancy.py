@@ -29,6 +29,17 @@ def test_best_direction_picks_the_open_way():
     assert abs(((chosen - 0 + 180) % 360) - 180) <= 30
 
 
+def test_extra_bias_steers_to_the_unvisited_side():
+    """Two equally-open ways; a visit penalty on one pushes it to the other."""
+    clrs = [0] * 24
+    clrs[0] = 30  # east open
+    clrs[12] = 30  # west open
+    extra = [0.0] * 24
+    extra[0] = -100.0  # east heavily visited -> avoid
+    chosen = best_direction(clrs, motion_deg=0.0, turn_penalty=0.0, extra=extra)
+    assert abs(((chosen - 180 + 180) % 360) - 180) <= 15  # picks west
+
+
 def test_best_direction_turns_away_from_a_wall_ahead():
     g = _open_east()
     # travelling WEST (into the black) -> must choose ~east (the open corridor)

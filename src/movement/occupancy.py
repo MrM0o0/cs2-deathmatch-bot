@@ -44,16 +44,20 @@ def clearance_at(clrs, deg):
     return clrs[k]
 
 
-def best_direction(clrs, motion_deg, turn_penalty=0.18):
-    """Pick the direction to head: the most open ray, but penalised for how far
-    it is from the current travel direction so the bot prefers to keep going /
-    make gentle course changes rather than spin around. Returns degrees."""
+def best_direction(clrs, motion_deg, turn_penalty=0.18, extra=None):
+    """Pick the direction to head: the most open ray, penalised for how far it is
+    from the current travel direction (prefer to keep going / gentle course
+    changes, not spin around). `extra`, if given, is a per-ray additive score --
+    used to bias toward unexplored areas (visit memory) so it doesn't circle.
+    Returns degrees."""
     n = len(clrs)
     best_deg, best_score = motion_deg, -1e9
     for k in range(n):
         deg = 360.0 * k / n
         ang_dist = abs(((deg - motion_deg + 180) % 360) - 180)
         score = clrs[k] - turn_penalty * ang_dist
+        if extra is not None:
+            score += extra[k]
         if score > best_score:
             best_score, best_deg = score, deg
     return best_deg

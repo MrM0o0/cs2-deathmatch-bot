@@ -108,6 +108,9 @@ def main():
     ap.add_argument(
         "--stuck-secs", type=float, default=1.0, help="No motion this long -> blind sweep"
     )
+    ap.add_argument(
+        "--novelty", type=float, default=4.0, help="Pull toward unexplored areas (anti-circling)"
+    )
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
     args = ap.parse_args()
 
@@ -138,6 +141,12 @@ def main():
             keyboard.key_up(k)
             keys_down.discard(k)
         mouse.release_all_buttons()
+
+    # visit memory: a coarse grid over the minimap; recently-visited cells are
+    # penalised so the bot heads to fresh ground instead of circling.
+    cell = 16
+    gsz = msz // cell
+    visits = np.zeros((gsz, gsz), dtype=float)
 
     active = False
     hist = deque(maxlen=20)  # (t, pos) ~0.66s for motion heading
@@ -195,6 +204,19 @@ def main():
 
             clrs = radar_clearances(gray, bx, by, N_RAYS, MAX_R, START_R, black)
 
+            # visit memory: mark where we are (slow decay), then build a per-ray
+            # penalty for heading into cells we've already been -> anti-circling.
+            visits *= 0.9995
+            visits[min(gsz - 1, by // cell), min(gsz - 1, bx // cell)] += 1.0
+            vmax = max(1.0, float(visits.max()))
+            extra = []
+            for k in range(N_RAYS):
+                a = 2 * math.pi * k / N_RAYS
+                d = min(clrs[k], 22)  # look a bit ahead along the ray
+                gx = min(gsz - 1, max(0, int(bx + d * math.cos(a)) // cell))
+                gy = min(gsz - 1, max(0, int(by + d * math.sin(a)) // cell))
+                extra.append(-args.novelty * 10.0 * visits[gy, gx] / vmax)
+
             # motion heading from how the dot has moved recently
             hist.append((now, (bx, by)))
             if len(hist) >= 2:
@@ -210,7 +232,7 @@ def main():
                 mouse.move_relative(sweep_dir * args.slice, 0)
                 state = "sweep"
             else:
-                chosen = best_direction(clrs, motion_deg)
+                chosen = best_direction(clrs, motion_deg, extra=extra)
                 err = normalize_angle(chosen - motion_deg)
                 if abs(err) > args.deadzone:
                     tc = int(max(-args.slice, min(args.slice, err * cpd)))
