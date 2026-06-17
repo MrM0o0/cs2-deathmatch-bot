@@ -41,7 +41,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.capture.screen import ScreenCapture
 from src.input import keyboard, mouse
 from src.movement.navigator import WaypointGraph
-from src.movement.occupancy import best_direction, clearance_at, radar_clearances
+from src.movement.occupancy import best_direction, radar_clearances
 from src.utils.math_helpers import angle_between, distance, normalize_angle
 from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
@@ -195,11 +195,7 @@ def main():
     hist = deque(maxlen=20)
     motion_deg = None
     last_move_t = 0.0
-    jump_count = 0
-    last_jump_t = 0.0
     stall_start = 0.0
-    crouching = False
-    crouch_until = 0.0
     sweep_dir = 1
     last_dump = 0.0
     status_t = 0.0
@@ -269,50 +265,20 @@ def main():
                 stalled = motion_deg is not None and now - last_move_t > args.stuck_secs
                 if not stalled:
                     stall_start = now
-                if crouching and (not stalled or now >= crouch_until):
-                    mouse.crouch_up()  # end the crouch once moving again / time up
-                    crouching = False
 
                 if motion_deg is None:
                     state = "spinup"  # walk to establish facing
                 elif stalled:
-                    fwd = clearance_at(clrs, node_bearing)
-                    if (
-                        fwd >= args.obstacle_clear
-                        and jump_count < args.max_jumps
-                        and now - last_jump_t > 0.45
-                    ):
-                        mouse.jump()  # scroll-down = the user's jump bind
-                        last_jump_t = now
-                        jump_count += 1
-                        state = "jump"
-                    elif (
-                        jump_count >= args.max_jumps
-                        and not crouching
-                        and now - stall_start < args.skip_after
-                    ):
-                        mouse.crouch_down()  # mouse5 = the user's crouch bind (low gap?)
-                        crouching = True
-                        crouch_until = now + 0.6
-                        state = "crouch"
-                    elif now - stall_start > args.skip_after:
-                        ridx += 1  # genuinely can't reach it -> give up on this node
-                        jump_count = 0
+                    # Stuck on an object the radar can't see. Most dust2 objects
+                    # are NOT climbable, so go AROUND: sweep-turn (toward the node
+                    # side) while pushing forward until the dot moves again.
+                    mouse.move_relative(sweep_dir * args.slice, 0)
+                    state = "around"
+                    if now - stall_start > args.skip_after:
+                        ridx += 1  # couldn't get around -> drop node, try other way
                         stall_start = now
-                        state = "skip"
-                    else:
-                        _, sweep_dir = head_to_node(
-                            clrs,
-                            node_bearing,
-                            motion_deg,
-                            args.node_stick,
-                            args.deadzone,
-                            args.slice,
-                            cpd,
-                        )
-                        state = "unstick"
+                        sweep_dir = -sweep_dir
                 else:
-                    jump_count = 0
                     _, sweep_dir = head_to_node(
                         clrs,
                         node_bearing,
