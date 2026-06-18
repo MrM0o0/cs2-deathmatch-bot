@@ -101,7 +101,7 @@ def main():
     ap.add_argument("--offroute", type=float, default=45.0, help="Px off-route -> walk back first")
     ap.add_argument("--reach", type=float, default=10.0, help="Px to a recover target = arrived")
     ap.add_argument("--head-tol", type=float, default=14.0, help="Deg facing error = oriented")
-    ap.add_argument("--slice", type=int, default=200, help="Max mouse counts/tick during recovery")
+    ap.add_argument("--slice", type=int, default=120, help="Max mouse counts/tick during recovery")
     ap.add_argument("--cpd", type=float, default=0.0, help="Counts/deg (0 = from sensitivity)")
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
     args = ap.parse_args()
@@ -161,7 +161,7 @@ def main():
     def turn_to(target_deg, cur_deg):
         err = normalize_angle(target_deg - cur_deg)
         if abs(err) > args.head_tol:
-            mouse.move_relative(int(max(-args.slice, min(args.slice, err * cpd))), 0)
+            smooth_move(int(max(-args.slice, min(args.slice, err * cpd))), 0)  # smooth, not a jump
             return False
         return True
 
@@ -215,7 +215,9 @@ def main():
                     release_all()  # stop replaying inputs while we recover
                 else:
                     set_keys(f["k"])
-                    smooth_move(int(f["m"][0]), int(f["m"][1]))
+                    # Replay yaw (horizontal) only -- pitch has no feedback signal
+                    # so replaying it just drifts the view into the floor.
+                    smooth_move(int(f["m"][0]), 0)
                     i += direction  # advance along the macro, ping-pong at ends
                     if i >= len(frames):
                         i, direction = len(frames) - 2, -1
