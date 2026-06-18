@@ -1,0 +1,91 @@
+{
+  "map": "dust2",
+  "_doc": "Semantic area graph (CSKnow-style). Sits ON TOP of dust2.json (the dense position trail) and does not replace it. 'landmarks' = YOLO landmark classes visible from this area, used to localize independent of the radar dot. 'neighbors' = connected areas (for routing intent). 'danger_from' = neighbor areas enemies most likely appear from when standing here -> bot pre-aims toward those areas' centroids on approach, hands to the existing detector + R4 combat. Bearings are derived later from each area's centroid (no hand-tuned degrees). Starter set, dust2 only, expand once the loop is proven.",
+  "areas": {
+    "t_spawn": {
+      "landmarks": ["t_spawn"],
+      "neighbors": ["outside_long", "mid", "upper_tunnels"],
+      "danger_from": []
+    },
+    "outside_long": {
+      "landmarks": [],
+      "neighbors": ["t_spawn", "long_doors"],
+      "danger_from": ["long_doors"]
+    },
+    "long_doors": {
+      "landmarks": [],
+      "neighbors": ["outside_long", "a_long"],
+      "danger_from": ["a_long", "pit"]
+    },
+    "a_long": {
+      "landmarks": ["goose"],
+      "neighbors": ["long_doors", "a_site", "pit"],
+      "danger_from": ["pit", "a_site", "goose"]
+    },
+    "pit": {
+      "landmarks": [],
+      "neighbors": ["a_long", "a_site"],
+      "danger_from": ["long_doors"]
+    },
+    "a_site": {
+      "landmarks": ["goose"],
+      "neighbors": ["a_long", "pit", "catwalk", "goose"],
+      "danger_from": ["goose", "catwalk", "a_long"]
+    },
+    "goose": {
+      "landmarks": ["goose"],
+      "neighbors": ["a_site", "ct_spawn"],
+      "danger_from": ["ct_spawn"]
+    },
+    "catwalk": {
+      "landmarks": ["catwalk"],
+      "neighbors": ["a_site", "mid"],
+      "danger_from": ["a_site", "ct_mid"]
+    },
+    "mid": {
+      "landmarks": ["mid_doors", "xbox"],
+      "neighbors": ["t_spawn", "mid_doors", "catwalk", "b_doors"],
+      "danger_from": ["mid_doors", "catwalk", "ct_mid"]
+    },
+    "mid_doors": {
+      "landmarks": ["mid_doors"],
+      "neighbors": ["mid", "ct_mid"],
+      "danger_from": ["ct_mid"]
+    },
+    "ct_mid": {
+      "landmarks": [],
+      "neighbors": ["mid_doors", "ct_spawn", "b_doors"],
+      "danger_from": ["ct_spawn"]
+    },
+    "upper_tunnels": {
+      "landmarks": [],
+      "neighbors": ["t_spawn", "b_tunnels"],
+      "danger_from": ["b_tunnels"]
+    },
+    "b_tunnels": {
+      "landmarks": [],
+      "neighbors": ["upper_tunnels", "b_site"],
+      "danger_from": ["b_site", "b_doors"]
+    },
+    "b_site": {
+      "landmarks": ["b_car"],
+      "neighbors": ["b_tunnels", "b_doors", "b_car"],
+      "danger_from": ["b_doors", "ct_spawn"]
+    },
+    "b_car": {
+      "landmarks": ["b_car"],
+      "neighbors": ["b_site"],
+      "danger_from": ["b_doors", "b_tunnels"]
+    },
+    "b_doors": {
+      "landmarks": ["b_doors"],
+      "neighbors": ["b_site", "mid", "ct_mid"],
+      "danger_from": ["mid", "ct_mid"]
+    },
+    "ct_spawn": {
+      "landmarks": ["ct_spawn"],
+      "neighbors": ["goose", "ct_mid"],
+      "danger_from": ["goose", "ct_mid"]
+    }
+  }
+}

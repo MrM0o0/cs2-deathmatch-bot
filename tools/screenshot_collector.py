@@ -23,7 +23,11 @@ except ImportError:
 
 
 def collect_screenshots(
-    output_dir: str, interval: float = 2.0, max_count: int = 1000, monitor: int = 0
+    output_dir: str,
+    interval: float = 2.0,
+    max_count: int = 1000,
+    monitor: int = 0,
+    delay: float = 5.0,
 ):
     """Capture screenshots at regular intervals.
 
@@ -32,11 +36,19 @@ def collect_screenshots(
         interval: Seconds between captures.
         max_count: Maximum number of screenshots.
         monitor: Monitor index.
+        delay: Countdown before capturing starts, so you can alt-tab into CS2.
     """
     os.makedirs(output_dir, exist_ok=True)
     existing = len([f for f in os.listdir(output_dir) if f.endswith(".png")])
     print(f"[Collector] Output: {output_dir} ({existing} existing)")
     print(f"[Collector] Interval: {interval}s, Max: {max_count}")
+
+    if delay > 0:
+        print(f"[Collector] Alt-tab into CS2 now -- starting in {delay:.0f}s...")
+        for remaining in range(int(delay), 0, -1):
+            print(f"\r[Collector] {remaining}... ", end="", flush=True)
+            time.sleep(1)
+        print("\r[Collector] Go!        ")
     print("[Collector] Press Ctrl+C to stop")
 
     capture = ScreenCapture(monitor=monitor, target_fps=5)
@@ -84,6 +96,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--max", "-m", type=int, default=1000, help="Maximum screenshots")
     parser.add_argument("--monitor", type=int, default=0, help="Monitor index")
+    parser.add_argument(
+        "--delay", "-d", type=float, default=5.0, help="Countdown before starting (alt-tab time)"
+    )
     args = parser.parse_args()
 
-    collect_screenshots(args.output, args.interval, args.max, args.monitor)
+    collect_screenshots(args.output, args.interval, args.max, args.monitor, args.delay)
