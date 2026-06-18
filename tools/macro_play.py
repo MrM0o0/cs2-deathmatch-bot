@@ -45,22 +45,29 @@ from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
 from src.vision.minimap import MinimapReader
 
+_carry = [0.0, 0.0]  # sub-pixel remainder carried ACROSS frames (R2-style)
 
-def smooth_move(dx, dy, steps=4):
-    """Apply a mouse delta in a few sub-steps (carrying sub-pixel remainder) so
-    the replayed view motion is smooth, not one chunky jump per frame."""
-    if dx == 0 and dy == 0:
+
+def smooth_move(dx, dy, steps=5):
+    """Emit a mouse delta over several sub-steps, carrying the sub-pixel
+    remainder across calls so fractional motion isn't lost each frame -- this is
+    what made R2's aim glide instead of teleport."""
+    tx = _carry[0] + dx
+    ty = _carry[1] + dy
+    if -1 < tx < 1 and -1 < ty < 1:
+        _carry[0], _carry[1] = tx, ty
         return
-    rx = ry = 0.0
-    for _ in range(steps):
-        rx += dx / steps
-        ry += dy / steps
-        ix, iy = int(rx), int(ry)
-        rx -= ix
-        ry -= iy
+    emitted_x = emitted_y = 0
+    for s in range(1, steps + 1):
+        ix = int(tx * s / steps) - emitted_x
+        iy = int(ty * s / steps) - emitted_y
         if ix or iy:
             mouse.move_relative(ix, iy)
-        time.sleep(0.003)
+            emitted_x += ix
+            emitted_y += iy
+        time.sleep(0.0025)
+    _carry[0] = tx - emitted_x
+    _carry[1] = ty - emitted_y
 
 
 def annotate(region, frames, i, pos, heading):
@@ -100,7 +107,13 @@ def main():
     ap.add_argument("--resync", type=float, default=20.0, help="Px drift before re-syncing")
     ap.add_argument("--offroute", type=float, default=45.0, help="Px off-route -> walk back first")
     ap.add_argument("--reach", type=float, default=10.0, help="Px to a recover target = arrived")
-    ap.add_argument("--head-tol", type=float, default=14.0, help="Deg facing error = oriented")
+    ap.add_argument("--head-tol", type=float, default=20.0, help="Deg facing error = oriented")
+    ap.add_argument(
+        "--reorient-timeout",
+        type=float,
+        default=1.2,
+        help="Give up re-facing after N s (keep moving)",
+    )
     ap.add_argument("--slice", type=int, default=120, help="Max mouse counts/tick during recovery")
     ap.add_argument("--cpd", type=float, default=0.0, help="Counts/deg (0 = from sensitivity)")
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
@@ -169,6 +182,7 @@ def main():
     i = 0
     direction = 1
     state = "play"
+    reorient_start = 0.0
     status_t = 0.0
     last_dump = 0.0
     start = time.perf_counter()
@@ -212,6 +226,7 @@ def main():
                     state = (
                         "recover" if distance(pos, frames[i]["p"]) > args.offroute else "reorient"
                     )
+                    reorient_start = now
                     release_all()  # stop replaying inputs while we recover
                 else:
                     set_keys(f["k"])
@@ -231,11 +246,14 @@ def main():
                     keyboard.key_up("w")
                     keys_down.discard("w")
                     state = "reorient"
+                    reorient_start = now
                 else:
                     turn_to(angle_between(pos, f["p"]), heading)
 
             elif state == "reorient":  # face the recorded direction, then resume
-                if turn_to(f["h"], heading):
+                # Don't freeze here -- if the (noisy) facing read won't settle,
+                # give up after a bit and keep moving; PLAY will re-sync again.
+                if turn_to(f["h"], heading) or now - reorient_start > args.reorient_timeout:
                     state = "play"
 
             logger.log_tick(
