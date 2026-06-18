@@ -23,11 +23,17 @@ instant stop. END quits; --max-seconds backstops.
 import argparse
 import ctypes
 import json
+import math
 import os
 import sys
 import time
 
 import yaml
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -35,8 +41,49 @@ sys.path.insert(0, PROJECT_ROOT)
 from src.capture.screen import ScreenCapture
 from src.input import keyboard, mouse
 from src.utils.math_helpers import angle_between, distance, normalize_angle
+from src.utils.session_logger import SessionLogger
 from src.utils.timer_setup import enable_high_resolution_timer
 from src.vision.minimap import MinimapReader
+
+
+def smooth_move(dx, dy, steps=4):
+    """Apply a mouse delta in a few sub-steps (carrying sub-pixel remainder) so
+    the replayed view motion is smooth, not one chunky jump per frame."""
+    if dx == 0 and dy == 0:
+        return
+    rx = ry = 0.0
+    for _ in range(steps):
+        rx += dx / steps
+        ry += dy / steps
+        ix, iy = int(rx), int(ry)
+        rx -= ix
+        ry -= iy
+        if ix or iy:
+            mouse.move_relative(ix, iy)
+        time.sleep(0.003)
+
+
+def annotate(region, frames, i, pos, heading):
+    """Draw the recorded macro path + the current target frame + the actual dot."""
+    img = region.copy()
+    step = max(1, len(frames) // 300)
+    for j in range(step, len(frames), step):  # faint recorded path
+        a, b = frames[j - step]["p"], frames[j]["p"]
+        cv2.line(img, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])), (180, 180, 0), 1)
+    fp = frames[i]["p"]
+    cv2.circle(img, (int(fp[0]), int(fp[1])), 4, (255, 80, 0), -1)  # where macro expects us
+    cv2.circle(img, (int(pos[0]), int(pos[1])), 3, (255, 255, 255), 1)  # where we actually are
+    if heading is not None:
+        r = math.radians(heading)
+        cv2.line(
+            img,
+            (int(pos[0]), int(pos[1])),
+            (int(pos[0] + 16 * math.cos(r)), int(pos[1] + 16 * math.sin(r))),
+            (0, 255, 255),
+            2,
+        )
+    return cv2.resize(img, None, fx=3, fy=3, interpolation=cv2.INTER_NEAREST)
+
 
 KEY_NAMES = ["w", "a", "s", "d"]  # frame keys 0..3; index 4 = crouch (mouse5)
 RUN_VK = 0x4C  # L
@@ -79,9 +126,12 @@ def main():
     reader = MinimapReader(
         mm["x"], mm["y"], mm["size"], sat_min=mm["sat_min"], val_min=mm["val_min"]
     )
+    mx, my, msz = mm["x"], mm["y"], mm["size"]
     cap = ScreenCapture(monitor=cfg["display"]["monitor"], target_fps=max(60, int(1 / dt)))
     cap.start()
+    logger = SessionLogger(os.path.join(PROJECT_ROOT, "logs"), enabled=True)
     print(f"[play] {args.map}: {len(frames)} frames @ {macro.get('rate', 30)}Hz. HOLD L to replay.")
+    print(f"[play] logging to {logger.session_dir}")
 
     keys_down = set()
 
@@ -120,6 +170,7 @@ def main():
     direction = 1
     state = "play"
     status_t = 0.0
+    last_dump = 0.0
     start = time.perf_counter()
     try:
         while True:
@@ -164,8 +215,7 @@ def main():
                     release_all()  # stop replaying inputs while we recover
                 else:
                     set_keys(f["k"])
-                    if f["m"][0] or f["m"][1]:
-                        mouse.move_relative(int(f["m"][0]), int(f["m"][1]))
+                    smooth_move(int(f["m"][0]), int(f["m"][1]))
                     i += direction  # advance along the macro, ping-pong at ends
                     if i >= len(frames):
                         i, direction = len(frames) - 2, -1
@@ -186,6 +236,27 @@ def main():
                 if turn_to(f["h"], heading):
                     state = "play"
 
+            logger.log_tick(
+                t=round(now - start, 3),
+                state=state,
+                i=i,
+                x=x,
+                y=y,
+                rx=f["p"][0],
+                ry=f["p"][1],
+                drift=round(drift, 1),
+                head=round(heading, 1),
+                rhead=f["h"],
+            )
+            if cv2 is not None and now - last_dump >= 0.7:
+                region = frame[my : my + msz, mx : mx + msz]
+                stamp = f"{now - start:06.1f}".replace(".", "_")
+                cv2.imwrite(
+                    os.path.join(logger.session_dir, f"play_{stamp}_{state}.jpg"),
+                    annotate(region, frames, i, pos, heading),
+                    [cv2.IMWRITE_JPEG_QUALITY, 85],
+                )
+                last_dump = now
             if now - status_t >= 0.4:
                 print(
                     f"\r[play] {state:8s} | frame {i}/{len(frames)} | drift {drift:4.0f}px   ",
