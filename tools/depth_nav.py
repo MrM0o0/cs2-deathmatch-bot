@@ -70,9 +70,8 @@ def main():
     ap.add_argument("--cols", type=int, default=9, help="Horizontal bands to compare")
     ap.add_argument("--turn-gain", type=int, default=350, help="Max mouse counts/tick toward open")
     ap.add_argument("--invert", action="store_true", help="Flip if near/far is backwards")
-    ap.add_argument(
-        "--band", type=float, default=0.5, help="Eye-level band centre (0=top,1=bottom)"
-    )
+    ap.add_argument("--band-lo", type=float, default=0.45, help="Top of the look band (horizon)")
+    ap.add_argument("--band-hi", type=float, default=0.66, help="Bottom of the look band (chest)")
     ap.add_argument("--no-jump", action="store_true", help="Disable jump-over-obstacle")
     ap.add_argument("--max-seconds", type=float, default=180.0, help="Hard auto-stop")
     args = ap.parse_args()
@@ -121,15 +120,16 @@ def main():
             depth = sess.run(None, {in_name: blob})[0][0]  # (518,518), higher = closer
             h, w = depth.shape
 
-            # Eye-level band: median depth per column -> openness (far = open).
-            y0 = int(h * (args.band - 0.08))
-            y1 = int(h * (args.band + 0.08))
-            band = depth[max(0, y0) : min(h, y1), :]
+            # Look from the horizon DOWN to chest height, and per column take the
+            # NEAREST thing (max depth) -- so a waist-high obstacle in the walking
+            # path blocks that column instead of being "seen over" at eye level.
+            # (Stays above the immediate floor so the floor doesn't dominate.)
+            y0 = int(h * args.band_lo)
+            y1 = int(h * args.band_hi)
+            band = depth[y0:y1, :]
             colw = w // args.cols
-            near = np.array(
-                [np.median(band[:, c * colw : (c + 1) * colw]) for c in range(args.cols)]
-            )
-            openness = near if args.invert else -near  # want the farthest column
+            near = np.array([band[:, c * colw : (c + 1) * colw].max() for c in range(args.cols)])
+            openness = near if args.invert else -near  # most open = farthest nearest-thing
             best = int(np.argmax(openness))
             center = (args.cols - 1) / 2.0
             offset = (best - center) / center  # -1 (left) .. +1 (right)
@@ -159,6 +159,8 @@ def main():
                 cx = int((best + 0.5) * hw / args.cols)
                 cv2.line(heat, (cx, 0), (cx, hh), (0, 255, 0), 2)  # chosen direction
                 cv2.line(heat, (hw // 2, 0), (hw // 2, hh), (255, 255, 255), 1)  # center
+                for by in (args.band_lo, args.band_hi):  # the look band
+                    cv2.line(heat, (0, int(hh * by)), (hw, int(hh * by)), (0, 200, 255), 1)
                 stamp = f"{now - start:06.1f}".replace(".", "_")
                 cv2.imwrite(
                     os.path.join(logger.session_dir, f"depth_{stamp}.jpg"),
