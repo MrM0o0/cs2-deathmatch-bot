@@ -28,6 +28,7 @@ def collect_screenshots(
     max_count: int = 1000,
     monitor: int = 0,
     delay: float = 5.0,
+    prefix: str = "cs2",
 ):
     """Capture screenshots at regular intervals.
 
@@ -63,7 +64,7 @@ def collect_screenshots(
                 time.sleep(0.1)
                 continue
 
-            filename = f"cs2_{count:05d}.png"
+            filename = f"{prefix}_{count:05d}.png"
             filepath = os.path.join(output_dir, filename)
 
             if _HAS_CV2:
@@ -99,6 +100,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--delay", "-d", type=float, default=5.0, help="Countdown before starting (alt-tab time)"
     )
+    parser.add_argument(
+        "--prefix", "-p", default="cs2", help="Filename prefix (use a unique one per batch)"
+    )
     args = parser.parse_args()
 
-    collect_screenshots(args.output, args.interval, args.max, args.monitor, args.delay)
+    collect_screenshots(args.output, args.interval, args.max, args.monitor, args.delay, args.prefix)

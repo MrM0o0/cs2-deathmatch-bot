@@ -1,0 +1,324 @@
+{
+  "map": "mirage",
+  "_doc": "Semantic area graph for mirage (same schema as dust2_areas.json). Areas + connections from the player's callouts; connections auto-mirrored. 'landmarks' = boxable YOLO classes visible there; 'danger_from' = pre-aim targets. Topology is best-effort -- correct any wrong connection and re-run the graph test.",
+  "areas": {
+    "a_site": {
+      "landmarks": [
+        "palace",
+        "ticket",
+        "tetris"
+      ],
+      "neighbors": [
+        "cat",
+        "connector",
+        "jungle",
+        "palace",
+        "tetris",
+        "ticket"
+      ],
+      "danger_from": [
+        "ticket",
+        "jungle",
+        "connector",
+        "cat",
+        "ct_spawn"
+      ]
+    },
+    "alley": {
+      "landmarks": [],
+      "neighbors": [
+        "apps",
+        "b_site",
+        "market"
+      ],
+      "danger_from": [
+        "b_site",
+        "market"
+      ]
+    },
+    "apps": {
+      "landmarks": [],
+      "neighbors": [
+        "alley",
+        "kitchen",
+        "ladder",
+        "market",
+        "t_spawn"
+      ],
+      "danger_from": [
+        "market",
+        "kitchen",
+        "b_site"
+      ]
+    },
+    "b_site": {
+      "landmarks": [
+        "van"
+      ],
+      "neighbors": [
+        "alley",
+        "ct_spawn",
+        "house",
+        "market",
+        "mcdonalds"
+      ],
+      "danger_from": [
+        "market",
+        "ct_spawn",
+        "mcdonalds"
+      ]
+    },
+    "cat": {
+      "landmarks": [
+        "tetris"
+      ],
+      "neighbors": [
+        "a_site",
+        "short",
+        "tetris"
+      ],
+      "danger_from": [
+        "a_site"
+      ]
+    },
+    "connector": {
+      "landmarks": [
+        "window"
+      ],
+      "neighbors": [
+        "a_site",
+        "jungle",
+        "mid",
+        "window"
+      ],
+      "danger_from": [
+        "jungle",
+        "a_site",
+        "window"
+      ]
+    },
+    "ct_spawn": {
+      "landmarks": [
+        "ct_spawn"
+      ],
+      "neighbors": [
+        "b_site",
+        "jungle",
+        "market",
+        "ticket"
+      ],
+      "danger_from": []
+    },
+    "house": {
+      "landmarks": [],
+      "neighbors": [
+        "b_site",
+        "market"
+      ],
+      "danger_from": [
+        "b_site",
+        "market"
+      ]
+    },
+    "jungle": {
+      "landmarks": [],
+      "neighbors": [
+        "a_site",
+        "connector",
+        "ct_spawn"
+      ],
+      "danger_from": [
+        "ct_spawn"
+      ]
+    },
+    "kitchen": {
+      "landmarks": [],
+      "neighbors": [
+        "apps",
+        "ladder",
+        "market"
+      ],
+      "danger_from": [
+        "market"
+      ]
+    },
+    "ladder": {
+      "landmarks": [],
+      "neighbors": [
+        "apps",
+        "kitchen"
+      ],
+      "danger_from": [
+        "apps"
+      ]
+    },
+    "market": {
+      "landmarks": [
+        "market"
+      ],
+      "neighbors": [
+        "alley",
+        "apps",
+        "b_site",
+        "ct_spawn",
+        "house",
+        "kitchen",
+        "mcdonalds",
+        "under"
+      ],
+      "danger_from": [
+        "ct_spawn",
+        "b_site",
+        "under"
+      ]
+    },
+    "mcdonalds": {
+      "landmarks": [
+        "mcdonalds"
+      ],
+      "neighbors": [
+        "b_site",
+        "market"
+      ],
+      "danger_from": [
+        "b_site",
+        "market"
+      ]
+    },
+    "mid": {
+      "landmarks": [
+        "window"
+      ],
+      "neighbors": [
+        "connector",
+        "short",
+        "t_spawn",
+        "under",
+        "window"
+      ],
+      "danger_from": [
+        "connector",
+        "window",
+        "under"
+      ]
+    },
+    "palace": {
+      "landmarks": [
+        "palace"
+      ],
+      "neighbors": [
+        "a_site",
+        "ruins",
+        "t_ramp"
+      ],
+      "danger_from": [
+        "a_site",
+        "ticket"
+      ]
+    },
+    "ruins": {
+      "landmarks": [],
+      "neighbors": [
+        "palace",
+        "t_ramp"
+      ],
+      "danger_from": [
+        "palace",
+        "a_site"
+      ]
+    },
+    "short": {
+      "landmarks": [
+        "tetris"
+      ],
+      "neighbors": [
+        "cat",
+        "mid",
+        "tetris"
+      ],
+      "danger_from": [
+        "a_site",
+        "cat",
+        "mid"
+      ]
+    },
+    "t_ramp": {
+      "landmarks": [],
+      "neighbors": [
+        "palace",
+        "ruins",
+        "t_spawn"
+      ],
+      "danger_from": [
+        "palace",
+        "ruins"
+      ]
+    },
+    "t_spawn": {
+      "landmarks": [
+        "t_spawn"
+      ],
+      "neighbors": [
+        "apps",
+        "mid",
+        "t_ramp"
+      ],
+      "danger_from": []
+    },
+    "tetris": {
+      "landmarks": [
+        "tetris"
+      ],
+      "neighbors": [
+        "a_site",
+        "cat",
+        "short"
+      ],
+      "danger_from": [
+        "a_site",
+        "short"
+      ]
+    },
+    "ticket": {
+      "landmarks": [
+        "ticket"
+      ],
+      "neighbors": [
+        "a_site",
+        "ct_spawn"
+      ],
+      "danger_from": [
+        "ct_spawn"
+      ]
+    },
+    "under": {
+      "landmarks": [
+        "window"
+      ],
+      "neighbors": [
+        "market",
+        "mid",
+        "window"
+      ],
+      "danger_from": [
+        "market",
+        "window"
+      ]
+    },
+    "window": {
+      "landmarks": [
+        "window"
+      ],
+      "neighbors": [
+        "connector",
+        "mid",
+        "under"
+      ],
+      "danger_from": [
+        "connector",
+        "jungle",
+        "under"
+      ]
+    }
+  }
+}
