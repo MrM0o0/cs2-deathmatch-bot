@@ -19,6 +19,7 @@ WM_CLOSE = 0x0010
 RID_INPUT = 0x10000003
 RIM_TYPEMOUSE = 0
 RIDEV_INPUTSINK = 0x00000100
+RI_MOUSE_WHEEL = 0x0400  # usButtonFlags bit: usButtonData holds a signed wheel delta
 HWND_MESSAGE = wintypes.HWND(-3)
 
 LRESULT = ctypes.c_ssize_t
@@ -127,6 +128,7 @@ class RawMouseListener:
     def __init__(self):
         self._dx = 0
         self._dy = 0
+        self._wheel = 0
         self._lock = threading.Lock()
         self._hwnd = None
         self._thread = None
@@ -138,6 +140,17 @@ class RawMouseListener:
             dx, dy = self._dx, self._dy
             self._dx = self._dy = 0
         return dx, dy
+
+    def read_wheel(self) -> int:
+        """Return signed scroll-wheel delta since the last call, then reset.
+
+        Negative = scrolled down (toward the user). Many players bind jump to
+        scroll, so this is how we capture jumps for the movement recorder.
+        """
+        with self._lock:
+            w = self._wheel
+            self._wheel = 0
+        return w
 
     def _on_input(self, lparam) -> None:
         size = wintypes.UINT(0)
@@ -155,6 +168,13 @@ class RawMouseListener:
             with self._lock:
                 self._dx += ri.mouse.lLastX
                 self._dy += ri.mouse.lLastY
+                # Wheel: low USHORT of ulButtons = flags, high USHORT = signed data.
+                flags = ri.mouse.ulButtons & 0xFFFF
+                if flags & RI_MOUSE_WHEEL:
+                    data = (ri.mouse.ulButtons >> 16) & 0xFFFF
+                    if data >= 0x8000:  # interpret high word as signed
+                        data -= 0x10000
+                    self._wheel += data
 
     def _run(self) -> None:
         def wndproc(hwnd, msg, wparam, lparam):
