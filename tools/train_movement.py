@@ -96,7 +96,10 @@ def load_dataset(data_dir):
     assert len(names) == len(labels), f"{data_dir}: {len(names)} frames vs {len(labels)} labels"
     x = np.empty((len(names), H, W, 3), dtype=np.uint8)
     for i, name in enumerate(names):
-        x[i] = cv2.imread(os.path.join(frames_dir, name))
+        img = cv2.imread(os.path.join(frames_dir, name))
+        if img.shape[:2] != (H, W):  # recordings are 320x180; train at 160x90
+            img = cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
+        x[i] = img
     return x, labels
 
 
